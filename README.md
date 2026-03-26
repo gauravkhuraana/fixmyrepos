@@ -181,6 +181,7 @@ git log --oneline --grep="chore: improve .gitignore" | head -1
 | `Cleanup` | No | `false` | Delete cloned repos from `WorkDir` after finishing |
 | `SkipArchived` | No | `true` | Skip archived repositories |
 | `SkipForks` | No | `true` | Skip forked repositories |
+| `BatchSize` | No | `30` | Pause for confirmation every N repos during analysis |
 
 \* If not provided, you'll be prompted interactively. Token also checks `$env:GITHUB_TOKEN`. **No token = scan-only mode** (public repos, no PRs).
 
