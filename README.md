@@ -166,6 +166,9 @@ git log --oneline --grep="chore: improve .gitignore" | head -1
 
 # Auto-delete cloned repos after creating PRs
 .\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Cleanup
+
+# Pause every 10 repos during analysis (default: 30)
+.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -BatchSize 10
 ```
 
 | Parameter | Required | Default | Description |

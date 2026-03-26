@@ -33,7 +33,7 @@ on:
         default: false
 
 env:
-  GITHUB_USER: 'your-username'   # ← Change this to your GitHub username
+  GITHUB_USER: 'gauravkhuraana'   # ← Change this to your GitHub username
 
 jobs:
   improve-gitignore:
