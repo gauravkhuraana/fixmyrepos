@@ -1,0 +1,92 @@
+# GitHub Actions workflow to run Improve-GitHubRepos on a schedule or manually.
+#
+# Setup:
+#   1. Add a Personal Access Token as a repository secret named IMPROVE_GH_TOKEN
+#      (needs "repo" scope — https://github.com/settings/tokens)
+#   2. Update GITHUB_USER below with your username
+#   3. Push this file to your repo — it will run monthly or on-demand
+
+name: Improve GitIgnore
+
+on:
+  # Run on the 1st of every month at 9:00 AM UTC
+  schedule:
+    - cron: '0 9 1 * *'
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (scan only, no PRs)'
+        type: boolean
+        default: true
+      repo_name:
+        description: 'Target specific repo(s) — comma-separated, or leave blank for all'
+        type: string
+        default: ''
+      exclude_repo:
+        description: 'Exclude specific repo(s) — comma-separated'
+        type: string
+        default: ''
+      direct_push:
+        description: 'Push directly to default branch (no PR)'
+        type: boolean
+        default: false
+
+env:
+  GITHUB_USER: 'your-username'   # ← Change this to your GitHub username
+
+jobs:
+  improve-gitignore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Improve-GitHubRepos
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.IMPROVE_GH_TOKEN }}
+        run: |
+          $params = @{
+            GitHubUser  = "${{ env.GITHUB_USER }}"
+            GitHubToken = $env:GH_TOKEN
+          }
+
+          # Handle workflow_dispatch inputs
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            if ('${{ inputs.dry_run }}' -eq 'true')       { $params['DryRun'] = $true }
+            if ('${{ inputs.direct_push }}' -eq 'true')   { $params['DirectPush'] = $true }
+            if ('${{ inputs.repo_name }}')                 { $params['RepoName'] = '${{ inputs.repo_name }}' }
+            if ('${{ inputs.exclude_repo }}')              { $params['ExcludeRepo'] = '${{ inputs.exclude_repo }}' }
+          } else {
+            # Scheduled runs default to DryRun for safety
+            $params['DryRun'] = $true
+          }
+
+          ./Improve-GitHubRepos.ps1 @params
+
+      - name: Check for issues found
+        if: github.event_name == 'schedule'
+        shell: pwsh
+        run: |
+          $cache = Get-ChildItem -Path logs -Filter "analysis-cache-*.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($cache) {
+            $data = Get-Content $cache.FullName -Raw | ConvertFrom-Json
+            if ($data.problemCount -gt 0) {
+              Write-Host "::error::Found $($data.problemCount) repo(s) with .gitignore issues out of $($data.totalScanned) scanned"
+              Write-Host "Run the script locally with option [2] or [3] to fix them."
+              exit 1
+            } else {
+              Write-Host "All $($data.totalScanned) repos are clean!"
+            }
+          }
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitignore-reports-${{ github.run_number }}
+          path: logs/
+          retention-days: 30

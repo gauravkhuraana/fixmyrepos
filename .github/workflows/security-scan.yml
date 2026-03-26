@@ -1,0 +1,112 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  psscriptanalyzer:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PSScriptAnalyzer
+        uses: microsoft/psscriptanalyzer-action@v1.1
+        with:
+          path: '*.ps1'
+          recurse: true
+          output: results.sarif
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # CodeQL doesn't natively support PowerShell, but catches
+          # any JS/TS if added later + validates YAML workflows
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard-results.json
+          results_format: json
+          publish_results: true
+
+      - name: Upload Scorecard SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.json
+
+  token-leak-check:
+    name: Verify No Token Leaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script never stores/transmits tokens
+        shell: bash
+        run: |
+          echo "=== Checking for suspicious token handling ==="
+          SCRIPT="Improve-GitHubRepos.ps1"
+
+          # Fail if token is written to any file (excluding redaction lines)
+          if grep -n 'GitHubToken' "$SCRIPT" | grep -i 'set-content\|add-content\|out-file\|export\|write.*file' | grep -v 'redact\|replace.*token\|x-access-token:\*\*\*'; then
+            echo "::error::FAIL — Found lines that may write token to file"
+            exit 1
+          fi
+
+          # Fail if token is sent to any non-GitHub URL
+          if grep -n 'Invoke-RestMethod\|Invoke-WebRequest' "$SCRIPT" | grep -v 'api.github.com\|raw.githubusercontent.com\|github.com'; then
+            echo "::error::FAIL — Found API calls to non-GitHub URLs"
+            exit 1
+          fi
+
+          # Verify all git output is redacted
+          CLONE_PUSH_LINES=$(grep -c 'x-access-token:[^@]*@' "$SCRIPT" || true)
+          REDACT_LINES=$(grep -c "x-access-token:\*\*\*" "$SCRIPT" || true)
+          echo "Lines with raw token in git URLs: $CLONE_PUSH_LINES"
+          echo "Lines with redaction pattern:     $REDACT_LINES"
+
+          if [ "$REDACT_LINES" -lt "$CLONE_PUSH_LINES" ]; then
+            echo "::error::FAIL — Not all git token URLs have redaction"
+            exit 1
+          fi
+
+          echo "✅ All checks passed — no token leaks detected"
