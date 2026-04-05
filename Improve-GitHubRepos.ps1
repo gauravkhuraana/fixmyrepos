@@ -1,3 +1,4 @@
+﻿# NOTE: This file must be saved as UTF-8 with BOM for Windows PowerShell 5.1 compatibility.
 <#
 .SYNOPSIS
     Scans all your GitHub repos, finds missing/weak .gitignore files,
