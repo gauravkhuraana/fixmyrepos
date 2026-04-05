@@ -26,6 +26,7 @@ jobs:
           path: '*.ps1'
           recurse: true
           output: results.sarif
+          settings: .psscriptanalyzer-settings.psd1
 
       - name: Upload SARIF
         if: always()

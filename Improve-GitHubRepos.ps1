@@ -1942,7 +1942,7 @@ Write-Host "================================================" -ForegroundColor C
 
 # Auto-open HTML report on Windows
 if ($IsWindows -or $env:OS -eq "Windows_NT") {
-    try { Invoke-Item $htmlFile } catch { }
+    try { Invoke-Item $htmlFile } catch { Write-Log "  Could not auto-open report: $_" -Level Warn }
 }
 
 # Cleanup cloned repos if requested
