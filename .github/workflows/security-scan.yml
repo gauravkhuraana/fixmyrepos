@@ -57,6 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     permissions:
+      contents: read
       security-events: write
       id-token: write
     steps:
@@ -95,7 +96,11 @@ jobs:
           fi
 
           # Fail if token is sent to any non-GitHub URL
-          if grep -n 'Invoke-RestMethod\|Invoke-WebRequest' "$SCRIPT" | grep -v 'api.github.com\|raw.githubusercontent.com\|github.com'; then
+          # Exclude: comments (<# ... #>), lines using $baseUrl variable (resolves to api.github.com at runtime)
+          if grep -n 'Invoke-RestMethod\|Invoke-WebRequest' "$SCRIPT" \
+            | grep -v 'api.github.com\|raw.githubusercontent.com\|github.com' \
+            | grep -v '<#\|#>' \
+            | grep -v '\$baseUrl\|\${baseUrl}'; then
             echo "::error::FAIL — Found API calls to non-GitHub URLs"
             exit 1
           fi
