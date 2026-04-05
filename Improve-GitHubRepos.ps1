@@ -244,7 +244,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
             try {
                 $cacheData = Get-Content -Path $cacheFiles[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
                 if ($cacheData.user) { $cachedUser = $cacheData.user }
-            } catch { }
+            } catch { Write-Verbose "Could not read analysis cache: $_" }
         }
     }
 
@@ -612,7 +612,7 @@ function Get-GitignoreTemplate {
     if ($tpl) {
         try {
             return Invoke-RestMethod -Uri "https://raw.githubusercontent.com/github/gitignore/main/${tpl}.gitignore" -TimeoutSec 10
-        } catch { }
+        } catch { Write-Verbose "Could not fetch gitignore template for $Language: $_" }
     }
     # Fallback: build from our pattern database
     $lines = @("# Auto-generated .gitignore for $Language","")
@@ -629,6 +629,7 @@ function Get-GitignoreTemplate {
 # ===========================================================================
 
 function Invoke-RepoAnalysis {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'RepoFullName', Justification='Passed for API consistency with callers')]
     param([string[]]$FilePaths, [string]$ExistingGitignore, [string]$Language, [string]$RepoFullName)
 
     $problems       = [System.Collections.Generic.List[object]]::new()
@@ -864,6 +865,7 @@ function Write-Report {
 }
 
 function Write-HtmlReport {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'ProblemResults', Justification='Kept for API consistency; may be used in future report sections')]
     param(
         [string]$ReportPath,
         $AllResults,
@@ -1351,7 +1353,7 @@ if ($Revert) {
                 } finally { Pop-Location }
             }
         } catch {
-            # No direct-push commits found or API error -- skip silently
+            Write-Verbose "No direct-push commits found or API error for $rn: $_"
         }
 
         # Per-repo summary
@@ -1457,7 +1459,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
                 Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
                 Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
                 Write-Host "================================================" -ForegroundColor Cyan
-                if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { } }
+                if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { Write-Verbose "Could not open report: $_" } }
                 exit 0
             }
 
@@ -1630,7 +1632,7 @@ if ($DryRun) {
     Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
     Write-Host "================================================" -ForegroundColor Cyan
 
-    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { } }
+    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
     exit 0
 }
 
@@ -1642,7 +1644,7 @@ if ($results.Count -eq 0) {
     Write-Log "Report (HTML): $htmlFile"; Write-Log "Report (MD): $reportFile"; Write-Log "Log: $logFile"
     Write-Host "`nAll repos look good!" -ForegroundColor Green
     Write-Host "  Report: $htmlFile" -ForegroundColor White
-    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { } }
+    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
     exit 0
 }
 
@@ -1789,7 +1791,7 @@ foreach ($result in $selectedResults) {
 
             if ($fix.ChangesMade) {
                 git add -A 2>&1 | Out-Null
-                $commitOutput = git commit -m "chore: improve .gitignore and remove tracked artifacts`n`n$($fix.CommitDetails)" 2>&1
+                $null = git commit -m "chore: improve .gitignore and remove tracked artifacts`n`n$($fix.CommitDetails)" 2>&1
                 $hasCommit = ($LASTEXITCODE -eq 0)
 
                 if (-not $hasCommit) {
