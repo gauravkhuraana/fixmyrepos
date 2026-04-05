@@ -66,14 +66,14 @@ jobs:
       - name: Run Scorecard
         uses: ossf/scorecard-action@v2.4.0
         with:
-          results_file: scorecard-results.json
-          results_format: json
+          results_file: scorecard-results.sarif
+          results_format: sarif
           publish_results: true
 
       - name: Upload Scorecard SARIF
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: scorecard-results.json
+          sarif_file: scorecard-results.sarif
 
   token-leak-check:
     name: Verify No Token Leaks
