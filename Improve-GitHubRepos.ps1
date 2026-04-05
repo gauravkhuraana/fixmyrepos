@@ -612,7 +612,7 @@ function Get-GitignoreTemplate {
     if ($tpl) {
         try {
             return Invoke-RestMethod -Uri "https://raw.githubusercontent.com/github/gitignore/main/${tpl}.gitignore" -TimeoutSec 10
-        } catch { Write-Verbose "Could not fetch gitignore template for $Language: $_" }
+        } catch { Write-Verbose "Could not fetch gitignore template for ${Language}: $_" }
     }
     # Fallback: build from our pattern database
     $lines = @("# Auto-generated .gitignore for $Language","")
@@ -1353,7 +1353,7 @@ if ($Revert) {
                 } finally { Pop-Location }
             }
         } catch {
-            Write-Verbose "No direct-push commits found or API error for $rn: $_"
+            Write-Verbose "No direct-push commits found or API error for ${rn}: $_"
         }
 
         # Per-repo summary
