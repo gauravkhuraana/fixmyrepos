@@ -188,7 +188,7 @@ if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
     $choice = Read-Host "  Enter choice [1-4]"
     switch ($choice) {
         '1' {
-            $DryRun = [switch]::new($true)
+            $DryRun = [switch]$true
             $script:ChosenMode = 'analyze'
             Write-Host "  -> Analyse mode selected. Will scan repos and generate a report." -ForegroundColor Green
         }
@@ -197,7 +197,7 @@ if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
             Write-Host "  -> PR mode selected. You'll pick which repos to fix." -ForegroundColor Yellow
         }
         '3' {
-            $DirectPush = [switch]::new($true)
+            $DirectPush = [switch]$true
             $script:ChosenMode = 'direct'
             Write-Host ""
             Write-Host "  WARNING: This will commit directly to each repo's default branch." -ForegroundColor Red
@@ -208,13 +208,13 @@ if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
             if ($confirm -ne 'yes') { Write-Host "  Cancelled." -ForegroundColor Gray; exit 0 }
         }
         '4' {
-            $Revert = [switch]::new($true)
+            $Revert = [switch]$true
             $script:ChosenMode = 'revert'
             Write-Host "  -> Revert mode selected." -ForegroundColor Magenta
         }
         default {
             Write-Host "  Invalid choice. Defaulting to analyse mode." -ForegroundColor Yellow
-            $DryRun = [switch]::new($true)
+            $DryRun = [switch]$true
             $script:ChosenMode = 'analyze'
         }
     }
@@ -292,9 +292,9 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
         if ([string]::IsNullOrWhiteSpace($plain)) {
             $GitHubToken = $null
             Write-Host "  No token provided -- falling back to scan-only mode (public repos, no PRs)." -ForegroundColor Yellow
-            $DryRun = [switch]::new($true)
-            $DirectPush = [switch]::new($false)
-            $Revert = [switch]::new($false)
+            $DryRun = [switch]$true
+            $DirectPush = [switch]$false
+            $Revert = [switch]$false
         } else {
             $GitHubToken = $plain
             $script:HasToken = $true
@@ -1071,10 +1071,14 @@ function GH-GetAllRepos {
         Write-Log "Fetching repos page $page ..."
         Wait-IfRateLimited
         try {
-            $resp = Invoke-RestMethod -Uri "${baseUrl}&page=$page" -Headers $script:GHHeaders -ResponseHeadersVariable respHeaders
-            Update-RateLimit $respHeaders
+            $webResp = Invoke-WebRequest -Uri "${baseUrl}&page=$page" -Headers $script:GHHeaders -UseBasicParsing
+            Update-RateLimit $webResp
+            $resp = $webResp.Content | ConvertFrom-Json
         } catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
+            $statusCode = 0
+            if ($_.Exception -and $_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
+                try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
+            }
             if ($statusCode -eq 403 -or $statusCode -eq 429) {
                 Write-Log "  Rate limit hit! GitHub API allows 60 requests/hour without a token, 5000 with." -Level Error
                 Write-Log "  Create a token at: https://github.com/settings/tokens?type=beta" -Level Error
@@ -1098,8 +1102,9 @@ function GH-GetTree {
     param([string]$Repo, [string]$Branch)
     Wait-IfRateLimited
     try {
-        $t = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/git/trees/${Branch}?recursive=1" -Headers $script:GHHeaders -ResponseHeadersVariable rh
-        Update-RateLimit $rh
+        $webResp = Invoke-WebRequest -Uri "https://api.github.com/repos/$Repo/git/trees/${Branch}?recursive=1" -Headers $script:GHHeaders -UseBasicParsing
+        Update-RateLimit $webResp
+        $t = $webResp.Content | ConvertFrom-Json
         return $t.tree
     } catch { Write-Log "  Could not fetch tree for $Repo -- $_" -Level Warn; return $null }
 }
@@ -1108,8 +1113,9 @@ function GH-GetGitignore {
     param([string]$Repo, [string]$Branch)
     Wait-IfRateLimited
     try {
-        $f = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/contents/.gitignore?ref=$Branch" -Headers $script:GHHeaders -ResponseHeadersVariable rh
-        Update-RateLimit $rh
+        $webResp = Invoke-WebRequest -Uri "https://api.github.com/repos/$Repo/contents/.gitignore?ref=$Branch" -Headers $script:GHHeaders -UseBasicParsing
+        Update-RateLimit $webResp
+        $f = $webResp.Content | ConvertFrom-Json
         return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($f.content))
     } catch { return $null }
 }
@@ -1129,11 +1135,18 @@ $script:RateLimitRemaining = 999
 $script:RateLimitReset     = 0
 
 function Update-RateLimit {
-    <# Call after any Invoke-RestMethod that uses -ResponseHeadersVariable #>
-    param([hashtable]$Headers)
-    if ($Headers -and $Headers['X-RateLimit-Remaining']) {
-        $script:RateLimitRemaining = [int]($Headers['X-RateLimit-Remaining'] | Select-Object -First 1)
-        $script:RateLimitReset     = [long]($Headers['X-RateLimit-Reset']     | Select-Object -First 1)
+    <# Call after any Invoke-WebRequest to extract rate-limit headers #>
+    param($Response)
+    if ($Response -and $Response.Headers) {
+        $h = $Response.Headers
+        if ($h['X-RateLimit-Remaining']) {
+            $val = $h['X-RateLimit-Remaining']
+            $script:RateLimitRemaining = [int]$(if ($val -is [array]) { $val[0] } else { $val })
+        }
+        if ($h['X-RateLimit-Reset']) {
+            $val = $h['X-RateLimit-Reset']
+            $script:RateLimitReset = [long]$(if ($val -is [array]) { $val[0] } else { $val })
+        }
     }
 }
 
@@ -1322,9 +1335,12 @@ if ($Revert) {
                 $rDir = Join-Path $WorkDir ($rn -replace "/", "_")
                 if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
                 $cloneUrl = "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
-                git clone $cloneUrl $rDir 2>&1 | ForEach-Object {
-                    $_ -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
-                } | Out-Null
+                $cloneOutput = & git clone $cloneUrl $rDir 2>&1
+                foreach ($line in $cloneOutput) {
+                    $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
+                    Write-Log "    $safeLine"
+                }
+                if ($LASTEXITCODE -ne 0) { throw "git clone failed with exit code $LASTEXITCODE" }
 
                 Push-Location $rDir
                 try {
@@ -1459,7 +1475,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
                 Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
                 Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
                 Write-Host "================================================" -ForegroundColor Cyan
-                if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { Write-Verbose "Could not open report: $_" } }
+                if ($env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { Write-Verbose "Could not open report: $_" } }
                 exit 0
             }
 
@@ -1632,7 +1648,7 @@ if ($DryRun) {
     Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
     Write-Host "================================================" -ForegroundColor Cyan
 
-    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
     exit 0
 }
 
@@ -1644,7 +1660,7 @@ if ($results.Count -eq 0) {
     Write-Log "Report (HTML): $htmlFile"; Write-Log "Report (MD): $reportFile"; Write-Log "Log: $logFile"
     Write-Host "`nAll repos look good!" -ForegroundColor Green
     Write-Host "  Report: $htmlFile" -ForegroundColor White
-    if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
     exit 0
 }
 
@@ -1763,12 +1779,19 @@ foreach ($result in $selectedResults) {
     Write-Log ""; Write-Log "-- [$phase3Index/$($selectedResults.Count)] Fixing: $rn --"
     try {
         if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
-        $cloneUrl = "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
+        $cloneUrl = if ($script:HasToken) {
+            "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
+        } else {
+            "https://github.com/${rn}.git"
+        }
         Write-Log "  Cloning ..."
-        git clone --depth 1 $cloneUrl $rDir 2>&1 | ForEach-Object {
-            $safeLine = $_ -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
+        $cloneOutput = & git clone --depth 1 $cloneUrl $rDir 2>&1
+        $cloneExit = $LASTEXITCODE
+        foreach ($line in $cloneOutput) {
+            $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
             Write-Log "    $safeLine"
         }
+        if ($cloneExit -ne 0) { throw "git clone failed with exit code $cloneExit" }
 
         Push-Location $rDir
         try {
@@ -1943,7 +1966,7 @@ Write-Host "  #SharingIsCaring" -ForegroundColor DarkCyan
 Write-Host "================================================" -ForegroundColor Cyan
 
 # Auto-open HTML report on Windows
-if ($IsWindows -or $env:OS -eq "Windows_NT") {
+if ($env:OS -eq "Windows_NT") {
     try { Invoke-Item $htmlFile } catch { Write-Log "  Could not auto-open report: $_" -Level Warn }
 }
 
