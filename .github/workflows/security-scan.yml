@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   psscriptanalyzer:
@@ -45,9 +44,8 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: javascript-typescript
-          # CodeQL doesn't natively support PowerShell, but catches
-          # any JS/TS if added later + validates YAML workflows
+          languages: actions
+          # Scans GitHub Actions workflow files for security issues
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
