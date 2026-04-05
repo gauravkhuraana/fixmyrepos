@@ -106,10 +106,11 @@ jobs:
           fi
 
           # Verify all git output is redacted
-          CLONE_PUSH_LINES=$(grep -c 'x-access-token:[^@]*@' "$SCRIPT" || true)
+          # Exclude $cloneUrl variable assignments (they construct the URL, never output it)
+          CLONE_PUSH_LINES=$(grep 'x-access-token:[^@]*@' "$SCRIPT" | grep -vc '\$cloneUrl\s*=' || true)
           REDACT_LINES=$(grep -c "x-access-token:\*\*\*" "$SCRIPT" || true)
-          echo "Lines with raw token in git URLs: $CLONE_PUSH_LINES"
-          echo "Lines with redaction pattern:     $REDACT_LINES"
+          echo "Lines with raw token in git URLs (excl. variable assignments): $CLONE_PUSH_LINES"
+          echo "Lines with redaction pattern:                                  $REDACT_LINES"
 
           if [ "$REDACT_LINES" -lt "$CLONE_PUSH_LINES" ]; then
             echo "::error::FAIL — Not all git token URLs have redaction"

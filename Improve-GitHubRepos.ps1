@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     Scans all your GitHub repos, finds missing/weak .gitignore files,
-    fixes them, and opens PRs — so your profile shows correct language stats
+    fixes them, and opens PRs -- so your profile shows correct language stats
     and repos stay lean.
 
 .DESCRIPTION
@@ -15,7 +15,7 @@
       4. Pushes a branch "improvement-YYYY-MM-DD" and opens a PR
       5. Generates a Markdown report with links to every PR
 
-    You stay in full control — every fix is a PR you can review, merge, or close.
+    You stay in full control -- every fix is a PR you can review, merge, or close.
 
 .PARAMETER GitHubUser
     Your GitHub username. If omitted, you'll be prompted.
@@ -23,7 +23,7 @@
 .PARAMETER GitHubToken
     GitHub Personal Access Token with "repo" scope.
     If omitted, checks $env:GITHUB_TOKEN, then prompts.
-    Press Enter to skip — runs in scan-only mode (no token needed for public repos).
+    Press Enter to skip -- runs in scan-only mode (no token needed for public repos).
     Create one at: https://github.com/settings/tokens
 
 .PARAMETER RepoName
@@ -37,7 +37,7 @@
     Where repos get cloned temporarily. Default: ./work
 
 .PARAMETER DryRun
-    Scan and report only — no cloning, no branches, no PRs.
+    Scan and report only -- no cloning, no branches, no PRs.
 
 .PARAMETER SkipArchived
     Skip archived repos. Default: true.
@@ -61,7 +61,7 @@
     Only used when scanning all repos (ignored if -RepoName is set).
 
 .EXAMPLE
-    # Just run it — you'll be prompted for what's needed:
+    # Just run it -- you'll be prompted for what's needed:
     .\Improve-GitHubRepos.ps1
 
 .EXAMPLE
@@ -124,18 +124,18 @@ $ErrorActionPreference = "Stop"
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 if (-not $WorkDir) { $WorkDir = Join-Path $scriptDir "work" }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 0: INTERACTIVE SETUP (when run without params)
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Show-Banner {
     Write-Host ""
-    Write-Host "  ╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║          Improve-GitHubRepos — .gitignore Fixer             ║" -ForegroundColor Cyan
-    Write-Host "  ║                                                              ║" -ForegroundColor Cyan
-    Write-Host "  ║  Scans your GitHub repos for missing/weak .gitignore files,  ║" -ForegroundColor Cyan
-    Write-Host "  ║  fixes them, and opens PRs so you stay in control.           ║" -ForegroundColor Cyan
-    Write-Host "  ╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "  +==============================================================+" -ForegroundColor Cyan
+    Write-Host "  |          Improve-GitHubRepos -- .gitignore Fixer             |" -ForegroundColor Cyan
+    Write-Host "  |                                                              |" -ForegroundColor Cyan
+    Write-Host "  |  Scans your GitHub repos for missing/weak .gitignore files,  |" -ForegroundColor Cyan
+    Write-Host "  |  fixes them, and opens PRs so you stay in control.           |" -ForegroundColor Cyan
+    Write-Host "  +==============================================================+" -ForegroundColor Cyan
     Write-Host ""
 }
 
@@ -154,33 +154,33 @@ if (-not $GitHubUser -or -not $GitHubToken) {
     Show-Banner
 }
 
-# ── Interactive mode menu (show FIRST so user knows what they're signing up for) ──
+# -- Interactive mode menu (show FIRST so user knows what they're signing up for) --
 $script:MenuWasShown = $false
 $script:ChosenMode = $null   # 'analyze', 'pr', 'direct', 'revert'
 $explicitMode = $DryRun -or $DirectPush -or $Revert
 if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
     $script:MenuWasShown = $true
-    Write-Host "  ┌──────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
-    Write-Host "  │  How would you like to run?                              │" -ForegroundColor Cyan
-    Write-Host "  ├──────────────────────────────────────────────────────────┤" -ForegroundColor Cyan
-    Write-Host "  │                                                          │" -ForegroundColor Cyan
-    Write-Host "  │  [1] Analyse repos (prerequisite — run this first)       │" -ForegroundColor Green
-    Write-Host "  │      Scans all repos for .gitignore issues.              │" -ForegroundColor DarkGray
-    Write-Host "  │      Generates an HTML report. Token optional.           │" -ForegroundColor DarkGray
-    Write-Host "  │                                                          │" -ForegroundColor Cyan
-    Write-Host "  │  [2] Fix via Pull Requests (recommended)                 │" -ForegroundColor Yellow
-    Write-Host "  │      Uses last analysis (or runs fresh). Creates PRs.    │" -ForegroundColor DarkGray
-    Write-Host "  │      You pick which repos. Needs token.                  │" -ForegroundColor DarkGray
-    Write-Host "  │                                                          │" -ForegroundColor Cyan
-    Write-Host "  │  [3] Direct merge to main/master (use with caution)      │" -ForegroundColor Red
-    Write-Host "  │      Uses last analysis (or runs fresh). Pushes directly.│" -ForegroundColor DarkGray
-    Write-Host "  │      You pick which repos. Needs token.                  │" -ForegroundColor DarkGray
-    Write-Host "  │                                                          │" -ForegroundColor Cyan
-    Write-Host "  │  [4] Revert previous changes                             │" -ForegroundColor Magenta
-    Write-Host "  │      Closes PRs, deletes branches, reverts pushes.       │" -ForegroundColor DarkGray
-    Write-Host "  │      Needs token.                                        │" -ForegroundColor DarkGray
-    Write-Host "  │                                                          │" -ForegroundColor Cyan
-    Write-Host "  └──────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "  |  How would you like to run?                              |" -ForegroundColor Cyan
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [1] Analyse repos (prerequisite -- run this first)       |" -ForegroundColor Green
+    Write-Host "  |      Scans all repos for .gitignore issues.              |" -ForegroundColor DarkGray
+    Write-Host "  |      Generates an HTML report. Token optional.           |" -ForegroundColor DarkGray
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [2] Fix via Pull Requests (recommended)                 |" -ForegroundColor Yellow
+    Write-Host "  |      Uses last analysis (or runs fresh). Creates PRs.    |" -ForegroundColor DarkGray
+    Write-Host "  |      You pick which repos. Needs token.                  |" -ForegroundColor DarkGray
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [3] Direct merge to main/master (use with caution)      |" -ForegroundColor Red
+    Write-Host "  |      Uses last analysis (or runs fresh). Pushes directly.|" -ForegroundColor DarkGray
+    Write-Host "  |      You pick which repos. Needs token.                  |" -ForegroundColor DarkGray
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [4] Revert previous changes                             |" -ForegroundColor Magenta
+    Write-Host "  |      Closes PRs, deletes branches, reverts pushes.       |" -ForegroundColor DarkGray
+    Write-Host "  |      Needs token.                                        |" -ForegroundColor DarkGray
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Created by gauravkhurana.com for community" -ForegroundColor DarkCyan
     Write-Host "  #SharingIsCaring" -ForegroundColor DarkCyan
@@ -190,18 +190,18 @@ if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
         '1' {
             $DryRun = [switch]::new($true)
             $script:ChosenMode = 'analyze'
-            Write-Host "  → Analyse mode selected. Will scan repos and generate a report." -ForegroundColor Green
+            Write-Host "  -> Analyse mode selected. Will scan repos and generate a report." -ForegroundColor Green
         }
         '2' {
             $script:ChosenMode = 'pr'
-            Write-Host "  → PR mode selected. You'll pick which repos to fix." -ForegroundColor Yellow
+            Write-Host "  -> PR mode selected. You'll pick which repos to fix." -ForegroundColor Yellow
         }
         '3' {
             $DirectPush = [switch]::new($true)
             $script:ChosenMode = 'direct'
             Write-Host ""
             Write-Host "  WARNING: This will commit directly to each repo's default branch." -ForegroundColor Red
-            Write-Host "  Changes go live immediately — no PR for review." -ForegroundColor Yellow
+            Write-Host "  Changes go live immediately -- no PR for review." -ForegroundColor Yellow
             Write-Host "  Use option [4] later to undo if needed." -ForegroundColor Yellow
             Write-Host ""
             $confirm = Read-Host "  Type 'yes' to confirm direct merge"
@@ -210,7 +210,7 @@ if (-not $explicitMode -and -not $GitHubUser -and -not $GitHubToken) {
         '4' {
             $Revert = [switch]::new($true)
             $script:ChosenMode = 'revert'
-            Write-Host "  → Revert mode selected." -ForegroundColor Magenta
+            Write-Host "  -> Revert mode selected." -ForegroundColor Magenta
         }
         default {
             Write-Host "  Invalid choice. Defaulting to analyse mode." -ForegroundColor Yellow
@@ -233,7 +233,7 @@ if ($null -eq $script:ChosenMode) {
 # Determine if token is required for the chosen mode
 $script:TokenRequired = -not $DryRun
 
-# Prompt for GitHubUser if missing — for options 2/3/4, try to reuse from cached analysis
+# Prompt for GitHubUser if missing -- for options 2/3/4, try to reuse from cached analysis
 if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
     $cachedUser = $null
     if ($script:ChosenMode -in @('pr', 'direct', 'revert')) {
@@ -254,7 +254,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
             $GitHubUser = Read-Host "  Enter your GitHub username"
         } else {
             $GitHubUser = $cachedUser
-            Write-Host "  → Using username: $GitHubUser" -ForegroundColor Green
+            Write-Host "  -> Using username: $GitHubUser" -ForegroundColor Green
         }
     } else {
         $GitHubUser = Read-Host "  Enter your GitHub username"
@@ -269,19 +269,19 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
     }
 }
 
-# Prompt for GitHubToken if missing — check env var first, allow skipping
+# Prompt for GitHubToken if missing -- check env var first, allow skipping
 if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
     if ($env:GITHUB_TOKEN) {
         $GitHubToken = $env:GITHUB_TOKEN
         Write-Host "  Using token from `$env:GITHUB_TOKEN" -ForegroundColor Green
         $script:HasToken = $true
     } elseif ($script:TokenRequired) {
-        Write-Host "  GitHub token (repo scope) — required for the selected mode." -ForegroundColor Gray
+        Write-Host "  GitHub token (repo scope) -- required for the selected mode." -ForegroundColor Gray
         Write-Host "  To create one:" -ForegroundColor Gray
         Write-Host "    1. Go to https://github.com/settings/tokens?type=beta" -ForegroundColor DarkCyan
-        Write-Host "    2. Click 'Generate new token' → give it a name" -ForegroundColor DarkCyan
+        Write-Host "    2. Click 'Generate new token' -> give it a name" -ForegroundColor DarkCyan
         Write-Host "    3. Under 'Repository access' select 'All repositories'" -ForegroundColor DarkCyan
-        Write-Host "    4. Under 'Permissions → Repository permissions':" -ForegroundColor DarkCyan
+        Write-Host "    4. Under 'Permissions -> Repository permissions':" -ForegroundColor DarkCyan
         Write-Host "       Contents = Read and write, Pull requests = Read and write" -ForegroundColor DarkCyan
         Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
         Write-Host ""
@@ -291,7 +291,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
         )
         if ([string]::IsNullOrWhiteSpace($plain)) {
             $GitHubToken = $null
-            Write-Host "  No token provided — falling back to scan-only mode (public repos, no PRs)." -ForegroundColor Yellow
+            Write-Host "  No token provided -- falling back to scan-only mode (public repos, no PRs)." -ForegroundColor Yellow
             $DryRun = [switch]::new($true)
             $DirectPush = [switch]::new($false)
             $Revert = [switch]::new($false)
@@ -300,7 +300,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
             $script:HasToken = $true
         }
     } else {
-        Write-Host "  Scan-only mode — token is optional but recommended." -ForegroundColor Green
+        Write-Host "  Scan-only mode -- token is optional but recommended." -ForegroundColor Green
         Write-Host "  Without a token: 60 API requests/hour (may hit rate limits)." -ForegroundColor DarkGray
         Write-Host "  With a token:    5,000 requests/hour." -ForegroundColor DarkGray
         Write-Host ""
@@ -309,9 +309,9 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
             Write-Host "" 
             Write-Host "  To create one:" -ForegroundColor Gray
             Write-Host "    1. Go to https://github.com/settings/tokens?type=beta" -ForegroundColor DarkCyan
-            Write-Host "    2. Click 'Generate new token' → give it a name" -ForegroundColor DarkCyan
+            Write-Host "    2. Click 'Generate new token' -> give it a name" -ForegroundColor DarkCyan
             Write-Host "    3. Under 'Repository access' select 'All repositories'" -ForegroundColor DarkCyan
-            Write-Host "    4. Under 'Permissions → Repository permissions':" -ForegroundColor DarkCyan
+            Write-Host "    4. Under 'Permissions -> Repository permissions':" -ForegroundColor DarkCyan
             Write-Host "       Contents = Read-only (write not needed for scan)" -ForegroundColor DarkCyan
             Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
             Write-Host ""
@@ -322,9 +322,9 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
             if (-not [string]::IsNullOrWhiteSpace($plain)) {
                 $GitHubToken = $plain
                 $script:HasToken = $true
-                Write-Host "  Token accepted — using authenticated rate limits (5,000/hr)." -ForegroundColor Green
+                Write-Host "  Token accepted -- using authenticated rate limits (5,000/hr)." -ForegroundColor Green
             } else {
-                Write-Host "  No token — continuing with unauthenticated limits (60/hr)." -ForegroundColor Yellow
+                Write-Host "  No token -- continuing with unauthenticated limits (60/hr)." -ForegroundColor Yellow
             }
         } else {
             Write-Host "  Continuing without token (60 requests/hour limit)." -ForegroundColor Yellow
@@ -334,7 +334,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
     $script:HasToken = $true
 }
 
-# Parse RepoName — support comma-separated and auto-prefix with user
+# Parse RepoName -- support comma-separated and auto-prefix with user
 if ($RepoName) {
     $parsed = [System.Collections.Generic.List[string]]::new()
     foreach ($rn in $RepoName) {
@@ -351,7 +351,7 @@ if ($RepoName) {
     Write-Host ""
 }
 
-# Parse ExcludeRepo — support comma-separated and auto-prefix with user
+# Parse ExcludeRepo -- support comma-separated and auto-prefix with user
 if ($ExcludeRepo) {
     $parsedExclude = [System.Collections.Generic.List[string]]::new()
     foreach ($er in $ExcludeRepo) {
@@ -381,11 +381,11 @@ if ($Revert -and -not $script:HasToken) {
     Write-Host "  ERROR: -Revert requires a GitHub token." -ForegroundColor Red; exit 1
 }
 
-# DirectPush confirmation (for CLI flag usage — interactive menu already confirmed)
+# DirectPush confirmation (for CLI flag usage -- interactive menu already confirmed)
 if ($DirectPush -and -not $script:MenuWasShown) {
     Write-Host ""
     Write-Host "  WARNING: -DirectPush will commit directly to each repo's default branch." -ForegroundColor Red
-    Write-Host "  Changes go live immediately — no PR for review." -ForegroundColor Yellow
+    Write-Host "  Changes go live immediately -- no PR for review." -ForegroundColor Yellow
     Write-Host "  Use -Revert later to undo if needed." -ForegroundColor Yellow
     Write-Host ""
     $confirm = Read-Host "  Type 'yes' to continue"
@@ -394,9 +394,9 @@ if ($DirectPush -and -not $script:MenuWasShown) {
     }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 1: LOGGING
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 $script:LogFilePath = $null
 
@@ -419,9 +419,9 @@ function Write-Log {
     if ($script:LogFilePath) { Add-Content -Path $script:LogFilePath -Value $line -Encoding UTF8 }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 1B: ANALYSIS CACHE (save/load analysis to avoid re-scanning)
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Get-AnalysisCachePath {
     param([string]$LogsDir, [string]$User)
@@ -534,9 +534,9 @@ function Restore-AnalysisFromCache {
     return @{ AllResults = $allResults; Results = $results; TotalScanned = $CacheData.totalScanned }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 2: JUNK PATTERN DATABASE (40+ patterns)
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 $script:JunkPatterns = @(
     # JavaScript / Node
@@ -595,9 +595,9 @@ function Get-JunkPatternsForLanguage {
     return $script:JunkPatterns | Where-Object { $_.Lang -contains "*" -or $_.Lang -contains $Language }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 3: GITIGNORE TEMPLATES
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Get-GitignoreTemplate {
     param([string]$Language)
@@ -624,9 +624,9 @@ function Get-GitignoreTemplate {
     return ($lines -join "`n")
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 4: REPO ANALYZER
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Invoke-RepoAnalysis {
     param([string[]]$FilePaths, [string]$ExistingGitignore, [string]$Language, [string]$RepoFullName)
@@ -655,7 +655,7 @@ function Invoke-RepoAnalysis {
             $sev = if ($pat.W -ge 7) { "high" } elseif ($pat.W -ge 4) { "medium" } else { "low" }
             $problems.Add([PSCustomObject]@{
                 Type="junk-committed"; Severity=$sev; Pattern=$p; FileCount=$hits.Count; Weight=$pat.W
-                Description="$($pat.Desc) — $($hits.Count) file(s) matching '$p'"
+                Description="$($pat.Desc) -- $($hits.Count) file(s) matching '$p'"
             })
             foreach ($f in $hits) { if (-not $junkFilesFound.Contains($f)) { $junkFilesFound.Add($f) } }
         }
@@ -688,7 +688,7 @@ function Invoke-RepoAnalysis {
     if ($ratio -gt 0.1 -and $junkCount -gt 20) {
         $problems.Add([PSCustomObject]@{
             Type="language-stat-inflation"; Severity="high"
-            Description="$junkCount of $total files ($([math]::Round($ratio*100,1))%) are artifacts — likely inflating language stats"
+            Description="$junkCount of $total files ($([math]::Round($ratio*100,1))%) are artifacts -- likely inflating language stats"
         })
     }
 
@@ -710,9 +710,9 @@ function Invoke-RepoAnalysis {
     }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 5: REPO FIXER
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Invoke-RepoFix {
     param([string]$RepoDir, [PSCustomObject]$Analysis, [string]$Language)
@@ -725,7 +725,7 @@ function Invoke-RepoFix {
     if ($Analysis.MissingGitignore) {
         Write-Log "  Fetching .gitignore template for '$Language' ..."
         $tpl = Get-GitignoreTemplate -Language $Language
-        $extra = "`n`n# ── Additional patterns (auto-detected) ──`n"
+        $extra = "`n`n# -- Additional patterns (auto-detected) --`n"
         foreach ($p in $Analysis.NeededPatterns) {
             if ($tpl -notmatch [regex]::Escape($p.TrimEnd("/"))) { $extra += "$p`n" }
         }
@@ -736,7 +736,7 @@ function Invoke-RepoFix {
     elseif ($Analysis.WeakGitignore -or ($Analysis.NeededPatterns -and $Analysis.NeededPatterns.Count -gt 0)) {
         $existing = Get-Content -Path $giPath -Raw -ErrorAction SilentlyContinue
         if ([string]::IsNullOrEmpty($existing)) { $existing = "" }
-        $append = "`n`n# ── Added by gitignore-improver (missing patterns) ──`n"
+        $append = "`n`n# -- Added by gitignore-improver (missing patterns) --`n"
         $count = 0
         foreach ($p in $Analysis.NeededPatterns) {
             if ($existing -notmatch [regex]::Escape($p.TrimEnd("/"))) { $append += "$p`n"; $count++ }
@@ -786,9 +786,9 @@ function Invoke-RepoFix {
     return [PSCustomObject]@{ ChangesMade=$changed; CommitDetails=($changeLog -join "`n"); ChangeLog=$changeLog }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 6: REPORT GENERATOR
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 function Write-Report {
     param([string]$ReportPath, $Results, [string]$GitHubUser, [string]$RunDate, [switch]$DryRun)
@@ -964,7 +964,7 @@ function Write-HtmlReport {
     [void]$sb.AppendLine('  <th>Action</th>')
     [void]$sb.AppendLine('</tr></thead><tbody>')
 
-    # Table rows — ALL repos
+    # Table rows -- ALL repos
     $i = 0
     foreach ($r in $AllResults) {
         $i++
@@ -1014,7 +1014,7 @@ function Write-HtmlReport {
     [void]$sb.AppendLine("<div class=`"footer`">Generated by <strong>Improve-GitHubRepos</strong> on $RunDate &middot; $($AllResults.Count) repos scanned</div>")
     [void]$sb.AppendLine('</div>')
 
-    # JavaScript — filter + sort
+    # JavaScript -- filter + sort
     [void]$sb.AppendLine('<script>')
     [void]$sb.AppendLine('function filterTable(){')
     [void]$sb.AppendLine('  var s=document.getElementById("searchBox").value.toLowerCase();')
@@ -1043,11 +1043,11 @@ function Write-HtmlReport {
     Set-Content -Path $ReportPath -Value $sb.ToString() -Encoding UTF8
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 7: GITHUB API HELPERS
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
-# Build API headers — with or without auth
+# Build API headers -- with or without auth
 $script:GHHeaders = @{
     "Accept"               = "application/vnd.github+json"
     "X-GitHub-Api-Version" = "2022-11-28"
@@ -1088,7 +1088,7 @@ function GH-GetAllRepos {
         $page++
     } while ($resp.Count -eq 100)
     Write-Log "Total repos: $($repos.Count)"
-    if (-not $script:HasToken) { Write-Log "  (public repos only — provide a token to include private repos)" }
+    if (-not $script:HasToken) { Write-Log "  (public repos only -- provide a token to include private repos)" }
     return $repos
 }
 
@@ -1099,7 +1099,7 @@ function GH-GetTree {
         $t = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/git/trees/${Branch}?recursive=1" -Headers $script:GHHeaders -ResponseHeadersVariable rh
         Update-RateLimit $rh
         return $t.tree
-    } catch { Write-Log "  Could not fetch tree for $Repo — $_" -Level Warn; return $null }
+    } catch { Write-Log "  Could not fetch tree for $Repo -- $_" -Level Warn; return $null }
 }
 
 function GH-GetGitignore {
@@ -1122,7 +1122,7 @@ function GH-CreatePR {
     } catch { Write-Log "  ERROR creating PR: $_" -Level Error; return $null }
 }
 
-# ── Rate Limit Helpers ──────────────────────────────────────────────────────
+# -- Rate Limit Helpers ------------------------------------------------------
 $script:RateLimitRemaining = 999
 $script:RateLimitReset     = 0
 
@@ -1147,9 +1147,9 @@ function Wait-IfRateLimited {
     }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 # SECTION 8: MAIN
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 $runDate    = Get-Date -Format "yyyy-MM-dd"
 $runTime    = Get-Date -Format "HHmmss"
@@ -1166,7 +1166,7 @@ Write-Log "===== Improve-GitHubRepos ====="
 Write-Log "User: $GitHubUser | DryRun: $DryRun | DirectPush: $DirectPush | Revert: $Revert | Token: $($script:HasToken) | Branch: $branchName"
 if ($RepoName) { Write-Log "Target repos: $($RepoName -join ', ')" }
 
-# ── Revert Mode (exits early) ──────────────────────────────────────────────
+# -- Revert Mode (exits early) ----------------------------------------------
 if ($Revert) {
     Write-Log "===== REVERT MODE ====="
 
@@ -1189,10 +1189,10 @@ if ($Revert) {
             }
 
             Write-Host ""
-            Write-Host "  ══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host "  ==============================================================" -ForegroundColor Cyan
             Write-Host "  Last analysis: $($cached.timestamp) ($($cached.totalScanned) repos scanned)" -ForegroundColor White
-            Write-Host "  $($revertCandidates.Count) repo(s) were flagged — select which ones to revert" -ForegroundColor Yellow
-            Write-Host "  ══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host "  $($revertCandidates.Count) repo(s) were flagged -- select which ones to revert" -ForegroundColor Yellow
+            Write-Host "  ==============================================================" -ForegroundColor Cyan
             Write-Host ""
 
             $idx = 0
@@ -1219,7 +1219,7 @@ if ($Revert) {
             $selection = Read-Host "  Select repos to revert"
 
             if ([string]::IsNullOrWhiteSpace($selection)) {
-                Write-Log "User cancelled — no repos selected for revert."
+                Write-Log "User cancelled -- no repos selected for revert."
                 Write-Host "  Cancelled." -ForegroundColor Gray
                 exit 0
             }
@@ -1250,9 +1250,9 @@ if ($Revert) {
             $revertRepos = @($selectedIndices | ForEach-Object { $revertCandidates[$_ - 1].RepoFullName })
 
             Write-Host ""
-            Write-Host "  → Selected $($revertRepos.Count) repo(s) to revert:" -ForegroundColor Magenta
+            Write-Host "  -> Selected $($revertRepos.Count) repo(s) to revert:" -ForegroundColor Magenta
             foreach ($rr in $revertRepos) {
-                Write-Host "    • $rr" -ForegroundColor White
+                Write-Host "    * $rr" -ForegroundColor White
             }
             Write-Host ""
             $confirm = Read-Host "  Type 'yes' to revert these $($revertRepos.Count) repo(s)"
@@ -1269,7 +1269,7 @@ if ($Revert) {
     $branchesDeleted = 0
     $commitsReverted = 0
     foreach ($rn in $revertRepos) {
-        Write-Log ""; Write-Log "── Checking: $rn ──"
+        Write-Log ""; Write-Log "-- Checking: $rn --"
         $repoPRs = 0; $repoBranches = 0; $repoCommits = 0
 
         # 1. Close open PRs created by this tool
@@ -1286,7 +1286,7 @@ if ($Revert) {
                 $repoPRs++
             }
         } catch {
-            Write-Log "  Could not check PRs for $rn — $_" -Level Warn
+            Write-Log "  Could not check PRs for $rn -- $_" -Level Warn
         }
 
         # 2. Delete improvement-* branches
@@ -1302,7 +1302,7 @@ if ($Revert) {
                 $repoBranches++
             }
         } catch {
-            Write-Log "  Could not check branches for $rn — $_" -Level Warn
+            Write-Log "  Could not check branches for $rn -- $_" -Level Warn
         }
 
         # 3. Revert direct-push commits on default branch (checks last 20 commits)
@@ -1333,7 +1333,7 @@ if ($Revert) {
                         Write-Log "  Reverting commit $($c.sha.Substring(0,7)): $firstLine"
                         git revert --no-edit $c.sha 2>&1 | Out-Null
                         if ($LASTEXITCODE -ne 0) {
-                            Write-Log "  Revert conflict — aborting this commit. Manual revert may be needed." -Level Warn
+                            Write-Log "  Revert conflict -- aborting this commit. Manual revert may be needed." -Level Warn
                             git revert --abort 2>&1 | Out-Null
                             continue
                         }
@@ -1347,11 +1347,11 @@ if ($Revert) {
                     }
                     $revertCount += $ourCommits.Count
                 } catch {
-                    Write-Log "  Revert failed: $_ — manual revert may be needed." -Level Error
+                    Write-Log "  Revert failed: $_ -- manual revert may be needed." -Level Error
                 } finally { Pop-Location }
             }
         } catch {
-            # No direct-push commits found or API error — skip silently
+            # No direct-push commits found or API error -- skip silently
         }
 
         # Per-repo summary
@@ -1361,24 +1361,24 @@ if ($Revert) {
             if ($repoPRs -gt 0)      { $parts += "$repoPRs PR(s) closed" }
             if ($repoBranches -gt 0)  { $parts += "$repoBranches branch(es) deleted" }
             if ($repoCommits -gt 0)  { $parts += "$repoCommits commit(s) reverted" }
-            Write-Host "  → $rn — $($parts -join ', ')" -ForegroundColor Magenta
+            Write-Host "  -> $rn -- $($parts -join ', ')" -ForegroundColor Magenta
         } else {
-            Write-Host "  → $rn — nothing to revert" -ForegroundColor Green
+            Write-Host "  -> $rn -- nothing to revert" -ForegroundColor Green
         }
     }
 
     Write-Log ""; Write-Log "===== Revert complete: $revertCount action(s) taken ====="
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
     Write-Host "  Revert complete!" -ForegroundColor Cyan
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
     Write-Host "  Repos checked:      $($revertRepos.Count)" -ForegroundColor White
     if ($prsClosed -gt 0)       { Write-Host "  PRs closed:         $prsClosed" -ForegroundColor White }
     if ($branchesDeleted -gt 0) { Write-Host "  Branches deleted:   $branchesDeleted" -ForegroundColor White }
     if ($commitsReverted -gt 0) { Write-Host "  Commits reverted:   $commitsReverted" -ForegroundColor White }
-    if ($revertCount -eq 0)     { Write-Host "  Nothing to revert — repos are already clean." -ForegroundColor Green }
+    if ($revertCount -eq 0)     { Write-Host "  Nothing to revert -- repos are already clean." -ForegroundColor Green }
     Write-Host "  Log:                $logFile" -ForegroundColor White
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
 
     # Update cached analysis: set reverted repos back to needs-fix
     if ($revertCount -gt 0) {
@@ -1406,7 +1406,7 @@ if ($Revert) {
     exit 0
 }
 
-# ── Analysis: Run fresh or load from cache ─────────────────────────────────
+# -- Analysis: Run fresh or load from cache ---------------------------------
 $analysisCachePath = Get-AnalysisCachePath -LogsDir $logsDir -User $GitHubUser
 $results    = [System.Collections.Generic.List[object]]::new()
 $allResults = [System.Collections.Generic.List[object]]::new()
@@ -1428,14 +1428,14 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
         $reportDisplay  = if ($lastReportPath) { [System.IO.Path]::GetFileName($lastReportPath) } else { "(not found)" }
 
         Write-Host ""
-        Write-Host "  ┌──────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
-        Write-Host "  │  Previous analysis found                                 │" -ForegroundColor Cyan
-        Write-Host "  ├──────────────────────────────────────────────────────────┤" -ForegroundColor Cyan
-        Write-Host "  │  Date:     $($cacheTime.PadRight(44))│" -ForegroundColor White
-        Write-Host "  │  Scanned:  $($cacheTotal.ToString().PadRight(44))│" -ForegroundColor White
-        Write-Host "  │  Issues:   $($cacheProblems.ToString().PadRight(44))│" -ForegroundColor Yellow
-        Write-Host "  │  Report:   $($reportDisplay.PadRight(44))│" -ForegroundColor White
-        Write-Host "  └──────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+        Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host "  |  Previous analysis found                                 |" -ForegroundColor Cyan
+        Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host "  |  Date:     $($cacheTime.PadRight(44))|" -ForegroundColor White
+        Write-Host "  |  Scanned:  $($cacheTotal.ToString().PadRight(44))|" -ForegroundColor White
+        Write-Host "  |  Issues:   $($cacheProblems.ToString().PadRight(44))|" -ForegroundColor Yellow
+        Write-Host "  |  Report:   $($reportDisplay.PadRight(44))|" -ForegroundColor White
+        Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
         Write-Host ""
         $reuseChoice = Read-Host "  Use this analysis? [Y/n] (Enter = yes, 'n' = run fresh analysis)"
         if ($reuseChoice -notmatch '^[nN]') {
@@ -1444,9 +1444,9 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
             # In analyse mode with existing report, just open it and exit
             if ($script:ChosenMode -eq 'analyze' -and $lastReportPath) {
                 Write-Host ""
-                Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+                Write-Host "================================================" -ForegroundColor Cyan
                 Write-Host "  Analysis already available!" -ForegroundColor Cyan
-                Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+                Write-Host "================================================" -ForegroundColor Cyan
                 Write-Host "  Scanned:  $cacheTotal repos" -ForegroundColor White
                 Write-Host "  Issues:   $cacheProblems" -ForegroundColor Yellow
                 Write-Host "  Report:   $lastReportPath" -ForegroundColor White
@@ -1456,7 +1456,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
                 Write-Host ""
                 Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
                 Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
-                Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+                Write-Host "================================================" -ForegroundColor Cyan
                 if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { } }
                 exit 0
             }
@@ -1466,7 +1466,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
             $results     = $restored.Results
             $totalScanned = $restored.TotalScanned
             $usedCache   = $true
-            Write-Host "  → Using cached analysis ($cacheProblems issues in $cacheTotal repos)." -ForegroundColor Green
+            Write-Host "  -> Using cached analysis ($cacheProblems issues in $cacheTotal repos)." -ForegroundColor Green
             Write-Host ""
         }
     }
@@ -1474,7 +1474,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
 
 # Run fresh analysis if no cache was used
 if (-not $usedCache) {
-    # ── Phase 1: Fetch repos ───────────────────────────────────────────────
+    # -- Phase 1: Fetch repos -----------------------------------------------
     Write-Log ""; Write-Log "PHASE 1: Fetching repos ..."
 
     if ($RepoName) {
@@ -1485,7 +1485,7 @@ if (-not $usedCache) {
                 $r = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders
                 $targetRepos.Add($r)
             } catch {
-                Write-Log "  Could not fetch repo '$rn' — $_ (skipping)" -Level Warn
+                Write-Log "  Could not fetch repo '$rn' -- $_ (skipping)" -Level Warn
             }
         }
         Write-Log "Repos to process: $($targetRepos.Count)"
@@ -1504,7 +1504,7 @@ if (-not $usedCache) {
 
     $totalScanned = $targetRepos.Count
 
-    # ── Phase 2: Analyze ───────────────────────────────────────────────────
+    # -- Phase 2: Analyze ---------------------------------------------------
     Write-Log ""; Write-Log "PHASE 2: Analyzing ..."
 
     $repoIndex = 0
@@ -1515,7 +1515,7 @@ if (-not $usedCache) {
         $branch = $repo.default_branch
         $lang   = if ($repo.language) { $repo.language } else { "Unknown" }
 
-        Write-Log ""; Write-Log "── [$repoIndex/$repoTotal] $name (lang=$lang) ──"
+        Write-Log ""; Write-Log "-- [$repoIndex/$repoTotal] $name (lang=$lang) --"
 
         $tree = GH-GetTree -Repo $name -Branch $branch
         if ($null -eq $tree) {
@@ -1551,11 +1551,11 @@ if (-not $usedCache) {
             })
         }
 
-        # ── Batch pause: ask user every BatchSize repos ──
+        # -- Batch pause: ask user every BatchSize repos --
         if ($BatchSize -gt 0 -and $repoIndex -lt $repoTotal -and ($repoIndex % $BatchSize) -eq 0) {
             Write-Log "Analyzed $repoIndex / $repoTotal repos so far ($($results.Count) with issues). Rate limit remaining: $($script:RateLimitRemaining)"
             Write-Host ""
-            Write-Host "  ── Batch checkpoint ($repoIndex / $repoTotal) ──" -ForegroundColor Cyan
+            Write-Host "  -- Batch checkpoint ($repoIndex / $repoTotal) --" -ForegroundColor Cyan
             Write-Host "  Repos with issues so far: $($results.Count)" -ForegroundColor Yellow
             Write-Host "  API calls remaining:      $($script:RateLimitRemaining)" -ForegroundColor $(if ($script:RateLimitRemaining -lt 10) { 'Red' } else { 'Green' })
             Write-Host ""
@@ -1574,40 +1574,40 @@ if (-not $usedCache) {
     Write-Log "Analysis cached: $analysisCachePath"
 }
 
-# ── Preview of changes ──────────────────────────────────────────────────────────
+# -- Preview of changes ----------------------------------------------------------
 if ($results.Count -gt 0) {
-    Write-Log ""; Write-Log "PREVIEW — what $(if ($DryRun) {'would'} else {'will'}) change:"
+    Write-Log ""; Write-Log "PREVIEW -- what $(if ($DryRun) {'would'} else {'will'}) change:"
     foreach ($r in $results) {
         $a = $r.Analysis
         Write-Host ""
-        Write-Host "  ┌─ $($r.RepoFullName) ($($r.Language))" -ForegroundColor Yellow
+        Write-Host "  +- $($r.RepoFullName) ($($r.Language))" -ForegroundColor Yellow
         if ($a.MissingGitignore) {
-            Write-Host "  │  + CREATE .gitignore ($($r.Language) template)" -ForegroundColor Green
+            Write-Host "  |  + CREATE .gitignore ($($r.Language) template)" -ForegroundColor Green
         } elseif ($a.WeakGitignore) {
-            Write-Host "  │  ~ APPEND to .gitignore: $($a.NeededPatterns.Count) patterns" -ForegroundColor Cyan
+            Write-Host "  |  ~ APPEND to .gitignore: $($a.NeededPatterns.Count) patterns" -ForegroundColor Cyan
         }
         if ($a.NeededPatterns.Count -gt 0) {
-            Write-Host "  │  Patterns to add:" -ForegroundColor Gray
+            Write-Host "  |  Patterns to add:" -ForegroundColor Gray
             foreach ($pat in $a.NeededPatterns) {
-                Write-Host "  │    + $pat" -ForegroundColor DarkGreen
+                Write-Host "  |    + $pat" -ForegroundColor DarkGreen
             }
         }
         if ($a.JunkFileCount -gt 0) {
-            Write-Host "  │  - UNTRACK $($a.JunkFileCount) junk file(s) via git rm --cached" -ForegroundColor Magenta
+            Write-Host "  |  - UNTRACK $($a.JunkFileCount) junk file(s) via git rm --cached" -ForegroundColor Magenta
             $preview = $a.JunkFiles | Select-Object -First 5
             foreach ($f in $preview) {
-                Write-Host "  │    - $f" -ForegroundColor DarkMagenta
+                Write-Host "  |    - $f" -ForegroundColor DarkMagenta
             }
             if ($a.JunkFileCount -gt 5) {
-                Write-Host "  │    ... and $($a.JunkFileCount - 5) more" -ForegroundColor DarkGray
+                Write-Host "  |    ... and $($a.JunkFileCount - 5) more" -ForegroundColor DarkGray
             }
         }
-        Write-Host "  └─" -ForegroundColor Yellow
+        Write-Host "  +-" -ForegroundColor Yellow
     }
     Write-Host ""
 }
 
-# ── Analysis-only mode: generate reports and exit ──────────────────────────
+# -- Analysis-only mode: generate reports and exit --------------------------
 if ($DryRun) {
     Write-Report -ReportPath $reportFile -Results $results -GitHubUser $GitHubUser -RunDate $runDate -DryRun:$true
     $htmlFile = $reportFile -replace '\.md$', '.html'
@@ -1615,9 +1615,9 @@ if ($DryRun) {
     Write-Log "Report (HTML): $htmlFile"; Write-Log "Report (MD): $reportFile"; Write-Log "Log: $logFile"
 
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
     Write-Host "  Analysis complete!" -ForegroundColor Cyan
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
     Write-Host "  Scanned:  $totalScanned repos" -ForegroundColor White
     Write-Host "  Issues:   $($results.Count)" -ForegroundColor Yellow
     Write-Host "  Report:   $htmlFile" -ForegroundColor White
@@ -1628,13 +1628,13 @@ if ($DryRun) {
     Write-Host ""
     Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
     Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "================================================" -ForegroundColor Cyan
 
     if ($IsWindows -or $env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { } }
     exit 0
 }
 
-# ── No issues found ─────────────────────────────────────────────────────────
+# -- No issues found ---------------------------------------------------------
 if ($results.Count -eq 0) {
     Write-Report -ReportPath $reportFile -Results $results -GitHubUser $GitHubUser -RunDate $runDate -DryRun:$DryRun
     $htmlFile = $reportFile -replace '\.md$', '.html'
@@ -1646,11 +1646,11 @@ if ($results.Count -eq 0) {
     exit 0
 }
 
-# ── Repo selection: show numbered list and let user pick ───────────────────
+# -- Repo selection: show numbered list and let user pick -------------------
 $action = if ($DirectPush) { "DIRECT MERGE" } else { "PULL REQUEST" }
-Write-Host "  ══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  $($results.Count) repo(s) have issues — select which ones to fix ($action)" -ForegroundColor Yellow
-Write-Host "  ══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "  ==============================================================" -ForegroundColor Cyan
+Write-Host "  $($results.Count) repo(s) have issues -- select which ones to fix ($action)" -ForegroundColor Yellow
+Write-Host "  ==============================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Check which repos already have improvement branches/PRs on GitHub
@@ -1683,7 +1683,7 @@ foreach ($r in $results) {
             default             { 'done' }
         }
         Write-Host "  [$idx] $($r.RepoFullName) $langInfo $statusIcon$junkInfo" -ForegroundColor DarkGray -NoNewline
-        Write-Host " ← $doneLabel" -ForegroundColor DarkYellow
+        Write-Host " <- $doneLabel" -ForegroundColor DarkYellow
     } else {
         Write-Host "  [$idx] $($r.RepoFullName) $langInfo $statusIcon$junkInfo" -ForegroundColor White
         $pendingCount++
@@ -1702,7 +1702,7 @@ Write-Host ""
 $selection = Read-Host "  Select repos"
 
 if ([string]::IsNullOrWhiteSpace($selection)) {
-    Write-Log "User cancelled — no repos selected."
+    Write-Log "User cancelled -- no repos selected."
     Write-Host "  Cancelled." -ForegroundColor Gray
     exit 0
 }
@@ -1737,9 +1737,9 @@ $selectedIndices.Sort()
 $selectedResults = @($selectedIndices | ForEach-Object { $results[$_ - 1] })
 
 Write-Host ""
-Write-Host "  → Selected $($selectedResults.Count) repo(s) for $($action.ToLower()):" -ForegroundColor Green
+Write-Host "  -> Selected $($selectedResults.Count) repo(s) for $($action.ToLower()):" -ForegroundColor Green
 foreach ($sr in $selectedResults) {
-    Write-Host "    • $($sr.RepoFullName)" -ForegroundColor White
+    Write-Host "    * $($sr.RepoFullName)" -ForegroundColor White
 }
 Write-Host ""
 
@@ -1749,7 +1749,7 @@ if ($DirectPush) {
     if ($confirm -ne 'yes') { Write-Host "  Cancelled." -ForegroundColor Gray; exit 0 }
 }
 
-# ── Phase 3: Fix + Push + PR ───────────────────────────────────────────────
+# -- Phase 3: Fix + Push + PR -----------------------------------------------
 Write-Log ""; Write-Log "PHASE 3: Fixing $($selectedResults.Count) repo(s) ($(if ($DirectPush) { 'direct merge' } else { 'branch + PR' })) ..."
 
 $phase3Index = 0
@@ -1758,7 +1758,7 @@ foreach ($result in $selectedResults) {
     $rn     = $result.RepoFullName
     $rDir   = Join-Path $WorkDir ($rn -replace "/", "_")
 
-    Write-Log ""; Write-Log "── [$phase3Index/$($selectedResults.Count)] Fixing: $rn ──"
+    Write-Log ""; Write-Log "-- [$phase3Index/$($selectedResults.Count)] Fixing: $rn --"
     try {
         if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
         $cloneUrl = "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
@@ -1850,13 +1850,13 @@ $($fix.CommitDetails)
     # Show progress after each repo
     $actionDone = if ($result.PRUrl) { "PR: $($result.PRUrl)" }
                   elseif ($result.Status -eq 'direct-pushed') { "Pushed to $($result.DefaultBranch)" }
-                  elseif ($result.Status -eq 'error') { "Error — check log" }
+                  elseif ($result.Status -eq 'error') { "Error -- check log" }
                   else { $result.Status }
     $statusColor = if ($result.Status -eq 'error') { 'Red' } else { 'Green' }
-    Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn → $actionDone" -ForegroundColor $statusColor
+    Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn -> $actionDone" -ForegroundColor $statusColor
 }
 
-# ── Phase 4: Report ────────────────────────────────────────────────────────
+# -- Phase 4: Report --------------------------------------------------------
 Write-Log ""; Write-Log "PHASE 4: Report ..."
 
 # Sync statuses from $results into $allResults (PRs, push status, etc.)
@@ -1915,9 +1915,9 @@ $directCount = @($selectedResults | Where-Object { $_.Status -eq "direct-pushed"
 $selectedCount = $selectedResults.Count
 $mode = if ($script:ChosenMode -eq 'analyze') { "analysis" } elseif ($DirectPush) { "direct push" } else { "PR" }
 Write-Host ""
-Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  Improve-GitHubRepos — Done! ($mode)" -ForegroundColor Cyan
-Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "  Improve-GitHubRepos -- Done! ($mode)" -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "  Scanned:  $totalScanned repos" -ForegroundColor White
 Write-Host "  Problems: $($results.Count)" -ForegroundColor Yellow
 if ($script:ChosenMode -ne 'analyze') {
@@ -1938,7 +1938,7 @@ Write-Host "  Log:      $logFile" -ForegroundColor White
 Write-Host ""
 Write-Host "  Created by gauravkhurana.com for community" -ForegroundColor DarkCyan
 Write-Host "  #SharingIsCaring" -ForegroundColor DarkCyan
-Write-Host "════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
 
 # Auto-open HTML report on Windows
 if ($IsWindows -or $env:OS -eq "Windows_NT") {
