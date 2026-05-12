@@ -60,6 +60,13 @@
       - Comma-separated: "repo1,repo2"
     Only used when scanning all repos (ignored if -RepoName is set).
 
+.PARAMETER Cleanup
+    Delete the WorkDir (cloned repos) after the run completes.
+
+.PARAMETER BatchSize
+    Pause for user confirmation every N repos during the analysis phase. Default: 30.
+    Set to 0 to disable batch pauses.
+
 .EXAMPLE
     # Just run it -- you'll be prompted for what's needed:
     .\Improve-GitHubRepos.ps1
@@ -472,7 +479,7 @@ function Save-AnalysisCache {
     $cache | ConvertTo-Json -Depth 6 | Set-Content -Path $CachePath -Encoding UTF8
 }
 
-function Load-AnalysisCache {
+function Import-AnalysisCache {
     param([string]$CachePath)
     if (-not (Test-Path $CachePath)) { return $null }
     try {
@@ -599,6 +606,17 @@ function Get-JunkPatternsForLanguage {
 # SECTION 3: GITIGNORE TEMPLATES
 # ===========================================================================
 
+function Test-GitignoreContainsPattern {
+    <# Checks if a .gitignore body already covers the given pattern.
+       Anchors the match to the start of a line and tolerates trailing slash + comments,
+       so substrings inside comments don't cause false positives. #>
+    param([string]$Body, [string]$Pattern)
+    if ([string]::IsNullOrEmpty($Body)) { return $false }
+    $clean = $Pattern.TrimEnd('/')
+    $escaped = [regex]::Escape($clean)
+    return [regex]::IsMatch($Body, "(?m)^\s*!?\s*/?$escaped/?\s*(#.*)?$")
+}
+
 function Get-GitignoreTemplate {
     param([string]$Language)
     $map = @{
@@ -634,6 +652,7 @@ function Invoke-RepoAnalysis {
 
     $problems       = [System.Collections.Generic.List[object]]::new()
     $junkFilesFound = [System.Collections.Generic.List[string]]::new()
+    $junkSeen       = [System.Collections.Generic.HashSet[string]]::new()
     $missingGI      = [string]::IsNullOrWhiteSpace($ExistingGitignore)
     $weakGI         = $false
     $total          = $FilePaths.Count
@@ -658,7 +677,7 @@ function Invoke-RepoAnalysis {
                 Type="junk-committed"; Severity=$sev; Pattern=$p; FileCount=$hits.Count; Weight=$pat.W
                 Description="$($pat.Desc) -- $($hits.Count) file(s) matching '$p'"
             })
-            foreach ($f in $hits) { if (-not $junkFilesFound.Contains($f)) { $junkFilesFound.Add($f) } }
+            foreach ($f in $hits) { if ($junkSeen.Add($f)) { $junkFilesFound.Add($f) } }
         }
     }
 
@@ -666,8 +685,7 @@ function Invoke-RepoAnalysis {
     if (-not $missingGI) {
         $missing = [System.Collections.Generic.List[object]]::new()
         foreach ($cp in ($junkPatterns | Where-Object { $_.W -ge 7 })) {
-            $clean = $cp.Pattern.TrimEnd("/")
-            if ($ExistingGitignore -notmatch [regex]::Escape($clean)) {
+            if (-not (Test-GitignoreContainsPattern -Body $ExistingGitignore -Pattern $cp.Pattern)) {
                 if ($problems | Where-Object { $_.Type -eq "junk-committed" -and $_.Pattern -eq $cp.Pattern }) {
                     $missing.Add($cp)
                 }
@@ -728,9 +746,9 @@ function Invoke-RepoFix {
         $tpl = Get-GitignoreTemplate -Language $Language
         $extra = "`n`n# -- Additional patterns (auto-detected) --`n"
         foreach ($p in $Analysis.NeededPatterns) {
-            if ($tpl -notmatch [regex]::Escape($p.TrimEnd("/"))) { $extra += "$p`n" }
+            if (-not (Test-GitignoreContainsPattern -Body $tpl -Pattern $p)) { $extra += "$p`n" }
         }
-        Set-Content -Path $giPath -Value ($tpl + $extra) -Encoding UTF8 -NoNewline
+        Set-Content -Path $giPath -Value ($tpl + $extra) -Encoding UTF8
         $changeLog.Add("- Created .gitignore with $Language template + $($Analysis.NeededPatterns.Count) extra patterns")
         $changed = $true
     }
@@ -740,7 +758,7 @@ function Invoke-RepoFix {
         $append = "`n`n# -- Added by gitignore-improver (missing patterns) --`n"
         $count = 0
         foreach ($p in $Analysis.NeededPatterns) {
-            if ($existing -notmatch [regex]::Escape($p.TrimEnd("/"))) { $append += "$p`n"; $count++ }
+            if (-not (Test-GitignoreContainsPattern -Body $existing -Pattern $p)) { $append += "$p`n"; $count++ }
         }
         if ($count -gt 0) {
             Add-Content -Path $giPath -Value $append -Encoding UTF8
@@ -772,11 +790,16 @@ function Invoke-RepoFix {
                 $changed = $true
             }
         }
-        $indiv = 0
-        foreach ($f in $filesToRemove) {
-            if (Test-Path (Join-Path $RepoDir $f)) { git rm --cached $f 2>&1 | Out-Null; $indiv++ }
-        }
+        $existing = @($filesToRemove | Where-Object { Test-Path (Join-Path $RepoDir $_) })
+        $indiv = $existing.Count
         if ($indiv -gt 0) {
+            # Batch in chunks to stay under command-line length limits (Windows ~8k)
+            $chunkSize = 200
+            for ($i = 0; $i -lt $existing.Count; $i += $chunkSize) {
+                $end = [math]::Min($i + $chunkSize - 1, $existing.Count - 1)
+                $chunk = $existing[$i..$end]
+                git rm --cached --quiet -- @chunk 2>&1 | Out-Null
+            }
             $changeLog.Add("- Removed $indiv individual junk files from tracking")
             $changed = $true
         }
@@ -1058,7 +1081,7 @@ if ($script:HasToken) {
     $script:GHHeaders["Authorization"] = "Bearer $GitHubToken"
 }
 
-function GH-GetAllRepos {
+function Get-GHRepoList {
     $repos = [System.Collections.Generic.List[object]]::new()
     $page = 1
     # Authenticated: /user/repos (includes private). Unauthenticated: /users/{user}/repos (public only)
@@ -1098,18 +1121,21 @@ function GH-GetAllRepos {
     return $repos
 }
 
-function GH-GetTree {
+function Get-GHTree {
     param([string]$Repo, [string]$Branch)
     Wait-IfRateLimited
     try {
         $webResp = Invoke-WebRequest -Uri "https://api.github.com/repos/$Repo/git/trees/${Branch}?recursive=1" -Headers $script:GHHeaders -UseBasicParsing
         Update-RateLimit $webResp
         $t = $webResp.Content | ConvertFrom-Json
+        if ($t.PSObject.Properties['truncated'] -and $t.truncated) {
+            Write-Log "  Tree truncated by GitHub API (repo exceeds 100k entries or 7MB). Analysis may be incomplete." -Level Warn
+        }
         return $t.tree
     } catch { Write-Log "  Could not fetch tree for $Repo -- $_" -Level Warn; return $null }
 }
 
-function GH-GetGitignore {
+function Get-GHGitignore {
     param([string]$Repo, [string]$Branch)
     Wait-IfRateLimited
     try {
@@ -1120,7 +1146,7 @@ function GH-GetGitignore {
     } catch { return $null }
 }
 
-function GH-CreatePR {
+function New-GHPullRequest {
     param([string]$Repo, [string]$Head, [string]$Base, [string]$Title, [string]$Body)
     try {
         $pr = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/pulls" -Headers $script:GHHeaders -Method Post `
@@ -1170,8 +1196,8 @@ $runDate    = Get-Date -Format "yyyy-MM-dd"
 $runTime    = Get-Date -Format "HHmmss"
 $branchName = "improvement-${runDate}-${runTime}"
 $logsDir    = Join-Path $scriptDir "logs"
-$logFile    = Join-Path $logsDir "run-$runDate.log"
-$reportFile = Join-Path $logsDir "report-$runDate.md"
+$logFile    = Join-Path $logsDir "run-$runDate-$runTime.log"
+$reportFile = Join-Path $logsDir "report-$runDate-$runTime.md"
 
 if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
 if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
@@ -1192,7 +1218,7 @@ if ($Revert) {
     } else {
         # Load last analysis cache to show repos that were processed
         $analysisCachePath = Get-AnalysisCachePath -LogsDir $logsDir -User $GitHubUser
-        $cached = Load-AnalysisCache -CachePath $analysisCachePath
+        $cached = Import-AnalysisCache -CachePath $analysisCachePath
         if ($cached -and $cached.user -eq $GitHubUser) {
             $revertCandidates = @($cached.allResults | Where-Object {
                 $_.Status -notin @('clean', 'skipped')
@@ -1334,6 +1360,7 @@ if ($Revert) {
                 Write-Log "  Found $($ourCommits.Count) direct-push commit(s) to revert on '$defBranch'"
                 $rDir = Join-Path $WorkDir ($rn -replace "/", "_")
                 if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
+                $publicUrl = "https://github.com/${rn}.git"
                 $cloneUrl = "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
                 $cloneOutput = & git clone $cloneUrl $rDir 2>&1
                 foreach ($line in $cloneOutput) {
@@ -1344,6 +1371,8 @@ if ($Revert) {
 
                 Push-Location $rDir
                 try {
+                    # Strip token from .git/config; pass tokened URL only at push time.
+                    git remote set-url origin $publicUrl 2>&1 | Out-Null
                     git config user.email "gitignore-improver@automation.local"
                     git config user.name "GitIgnore Improver"
                     foreach ($c in $ourCommits) {
@@ -1359,10 +1388,13 @@ if ($Revert) {
                         $repoCommits++
                     }
                     Write-Log "  Pushing revert(s) to $defBranch ..."
-                    git push origin $defBranch 2>&1 | ForEach-Object {
-                        $safeLine = $_ -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
+                    $pushOut = & git push $cloneUrl "HEAD:$defBranch" 2>&1
+                    $pushExit = $LASTEXITCODE
+                    foreach ($line in $pushOut) {
+                        $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
                         Write-Log "    $safeLine"
                     }
+                    if ($pushExit -ne 0) { throw "git push (revert) failed with exit code $pushExit" }
                     $revertCount += $ourCommits.Count
                 } catch {
                     Write-Log "  Revert failed: $_ -- manual revert may be needed." -Level Error
@@ -1401,7 +1433,7 @@ if ($Revert) {
     # Update cached analysis: set reverted repos back to needs-fix
     if ($revertCount -gt 0) {
         $revertCachePath = Get-AnalysisCachePath -LogsDir $logsDir -User $GitHubUser
-        $revertCache = Load-AnalysisCache -CachePath $revertCachePath
+        $revertCache = Import-AnalysisCache -CachePath $revertCachePath
         if ($revertCache) {
             $cacheUpdated = $false
             foreach ($rn in $revertRepos) {
@@ -1433,7 +1465,7 @@ $usedCache  = $false
 
 # Check if a cached analysis exists and offer to reuse
 if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script:ChosenMode -eq 'direct') {
-    $cached = Load-AnalysisCache -CachePath $analysisCachePath
+    $cached = Import-AnalysisCache -CachePath $analysisCachePath
     if ($cached -and $cached.user -eq $GitHubUser) {
         $cacheTime    = $cached.timestamp
         $cacheProblems = $cached.problemCount
@@ -1508,7 +1540,7 @@ if (-not $usedCache) {
         }
         Write-Log "Repos to process: $($targetRepos.Count)"
     } else {
-        $allRepos = GH-GetAllRepos
+        $allRepos = Get-GHRepoList
         $targetRepos = @($allRepos | Where-Object {
             $ok = $true
             if ($SkipArchived -and $_.archived) { $ok = $false }
@@ -1535,7 +1567,7 @@ if (-not $usedCache) {
 
         Write-Log ""; Write-Log "-- [$repoIndex/$repoTotal] $name (lang=$lang) --"
 
-        $tree = GH-GetTree -Repo $name -Branch $branch
+        $tree = Get-GHTree -Repo $name -Branch $branch
         if ($null -eq $tree) {
             Write-Log "  Skipping (empty/inaccessible)"
             $allResults.Add([PSCustomObject]@{
@@ -1547,7 +1579,7 @@ if (-not $usedCache) {
         }
 
         $files = @($tree | Where-Object { $_.type -eq "blob" } | Select-Object -ExpandProperty path)
-        $gi    = GH-GetGitignore -Repo $name -Branch $branch
+        $gi    = Get-GHGitignore -Repo $name -Branch $branch
         $analysis = Invoke-RepoAnalysis -FilePaths $files -ExistingGitignore $gi -Language $lang -RepoFullName $name
 
         if ($analysis.HasProblems) {
@@ -1779,10 +1811,11 @@ foreach ($result in $selectedResults) {
     Write-Log ""; Write-Log "-- [$phase3Index/$($selectedResults.Count)] Fixing: $rn --"
     try {
         if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
+        $publicUrl = "https://github.com/${rn}.git"
         $cloneUrl = if ($script:HasToken) {
             "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
         } else {
-            "https://github.com/${rn}.git"
+            $publicUrl
         }
         Write-Log "  Cloning ..."
         $cloneOutput = & git clone --depth 1 $cloneUrl $rDir 2>&1
@@ -1795,7 +1828,9 @@ foreach ($result in $selectedResults) {
 
         Push-Location $rDir
         try {
-            git fetch --unshallow 2>&1 | Out-Null
+            # Strip token from .git/config so it never lingers on disk.
+            # We pass the tokened URL explicitly at push time instead.
+            if ($script:HasToken) { git remote set-url origin $publicUrl 2>&1 | Out-Null }
             git config user.email "gitignore-improver@automation.local"
             git config user.name "GitIgnore Improver"
 
@@ -1825,17 +1860,23 @@ foreach ($result in $selectedResults) {
 
                 if ($DirectPush) {
                     Write-Log "  Pushing directly to $($result.DefaultBranch) ..."
-                    git push origin $($result.DefaultBranch) 2>&1 | ForEach-Object {
-                        $safeLine = $_ -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
+                    $pushOut = & git push $cloneUrl "HEAD:$($result.DefaultBranch)" 2>&1
+                    $pushExit = $LASTEXITCODE
+                    foreach ($line in $pushOut) {
+                        $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
                         Write-Log "    $safeLine"
                     }
+                    if ($pushExit -ne 0) { throw "git push failed with exit code $pushExit" }
                     $result.Status = "direct-pushed"
                 } else {
                     Write-Log "  Pushing branch ..."
-                    git push origin $branchName 2>&1 | ForEach-Object {
-                        $safeLine = $_ -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
+                    $pushOut = & git push $cloneUrl "${branchName}:${branchName}" 2>&1
+                    $pushExit = $LASTEXITCODE
+                    foreach ($line in $pushOut) {
+                        $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
                         Write-Log "    $safeLine"
                     }
+                    if ($pushExit -ne 0) { throw "git push failed with exit code $pushExit" }
 
                     $result.BranchUrl = "https://github.com/$rn/tree/$branchName"
 
@@ -1855,7 +1896,7 @@ $($fix.CommitDetails)
 
 > Auto-generated on $runDate
 "@
-                    $pr = GH-CreatePR -Repo $rn -Head $branchName -Base $result.DefaultBranch `
+                    $pr = New-GHPullRequest -Repo $rn -Head $branchName -Base $result.DefaultBranch `
                         -Title "chore: improve .gitignore ($runDate $runTime)" -Body $prBody
 
                     if ($pr) { $result.PRUrl = $pr.html_url; $result.Status = "pr-created" }
