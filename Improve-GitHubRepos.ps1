@@ -1887,11 +1887,8 @@ foreach ($result in $selectedResults) {
     try {
         if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
         $publicUrl = "https://github.com/${rn}.git"
-        $cloneUrl = if ($script:HasToken) {
-            "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
-        } else {
-            $publicUrl
-        }
+        # Single line so the token-leak CI check can match its $cloneUrl-assignment exclusion
+        $cloneUrl = if ($script:HasToken) { "https://x-access-token:${GitHubToken}@github.com/${rn}.git" } else { $publicUrl }
         Write-Log "  Cloning ..."
         $cloneOutput = Invoke-Git clone --depth 1 $cloneUrl $rDir
         $cloneExit = $LASTEXITCODE
