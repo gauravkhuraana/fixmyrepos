@@ -69,43 +69,47 @@
 
 .EXAMPLE
     # Just run it -- you'll be prompted for what's needed:
-    .\Improve-GitHubRepos.ps1
+    ./Improve-GitHubRepos.ps1
+
+.EXAMPLE
+    # macOS / Linux: run under PowerShell 7 (brew install powershell/tap/powershell)
+    pwsh ./Improve-GitHubRepos.ps1
 
 .EXAMPLE
     # Scan public repos WITHOUT a token (report only, no PRs):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat"
 
 .EXAMPLE
     # Dry run with token (scans private repos too):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DryRun
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DryRun
 
 .EXAMPLE
     # Fix a specific repo only:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "my-project"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "my-project"
 
 .EXAMPLE
     # Fix multiple specific repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "repo1,repo2"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "repo1,repo2"
 
 .EXAMPLE
     # Full run on all repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN
 
 .EXAMPLE
     # Push fixes directly to main (no branch/PR):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DirectPush
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DirectPush
 
 .EXAMPLE
     # Revert changes on a specific repo:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert -RepoName "my-project"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert -RepoName "my-project"
 
 .EXAMPLE
     # Revert all changes across all repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert
 
 .EXAMPLE
     # Scan all repos except a few:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -ExcludeRepo "old-junk,experiments"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -ExcludeRepo "old-junk,experiments"
 #>
 
 [CmdletBinding()]
@@ -270,8 +274,8 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
     if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
         Write-Host "  GitHub username is required. Exiting." -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Usage:  .\Improve-GitHubRepos.ps1 -GitHubUser 'you'" -ForegroundColor Gray
-        Write-Host "  Help:   Get-Help .\Improve-GitHubRepos.ps1 -Full" -ForegroundColor Gray
+        Write-Host "  Usage:  ./Improve-GitHubRepos.ps1 -GitHubUser 'you'" -ForegroundColor Gray
+        Write-Host "  Help:   Get-Help ./Improve-GitHubRepos.ps1 -Full" -ForegroundColor Gray
         exit 1
     }
 }

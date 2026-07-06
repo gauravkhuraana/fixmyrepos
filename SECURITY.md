@@ -20,14 +20,16 @@ The script is a single file. You can audit it in under 5 minutes:
 
 ```powershell
 # 1. Check every line that references the token variable:
-Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'GitHubToken' | Select-Object LineNumber, Line
+Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'GitHubToken' | Select-Object LineNumber, Line
 
 # 2. Verify all outbound URLs are GitHub-only:
-Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'Invoke-RestMethod|Invoke-WebRequest' | Select-Object LineNumber, Line
+Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'Invoke-RestMethod|Invoke-WebRequest' | Select-Object LineNumber, Line
 
 # 3. Confirm redaction is applied to all git output:
-Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'x-access-token' | Select-Object LineNumber, Line
+Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'x-access-token' | Select-Object LineNumber, Line
 ```
+
+These run in PowerShell on any OS. On macOS/Linux without PowerShell, `grep` works the same way, e.g. `grep -n 'GitHubToken' Improve-GitHubRepos.ps1`.
 
 ### Automated verification
 
