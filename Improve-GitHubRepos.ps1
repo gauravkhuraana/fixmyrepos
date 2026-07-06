@@ -962,8 +962,10 @@ function Write-HtmlReport {
     $issueCount = @($AllResults | Where-Object { $_.Status -ne 'clean' -and $_.Status -ne 'skipped' }).Count
     $skipCount  = @($AllResults | Where-Object { $_.Status -eq 'skipped' }).Count
     $prCount    = @($AllResults | Where-Object { $_.Status -eq 'pr-created' }).Count
-    $totalJunk  = ($AllResults | Measure-Object -Property JunkCount -Sum).Sum
-    if ($null -eq $totalJunk) { $totalJunk = 0 }
+    # Measure-Object returns $null on an empty pipeline, and .Sum on $null
+    # throws under StrictMode -- guard before dereferencing
+    $junkMeasure = $AllResults | Measure-Object -Property JunkCount -Sum
+    $totalJunk   = if ($junkMeasure -and $null -ne $junkMeasure.Sum) { $junkMeasure.Sum } else { 0 }
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('<!DOCTYPE html>')
