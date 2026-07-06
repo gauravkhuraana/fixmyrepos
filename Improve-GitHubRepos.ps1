@@ -589,9 +589,10 @@ function Restore-AnalysisFromCache {
 
         $allResults.Add($entry)
         # Keep already-processed repos in the selection list too (dimmed in the
-        # UI, selectable for a re-run) -- but only when their Analysis survived
-        # the round-trip, since the selection display dereferences it
-        if ($analysis -and $item.Status -in @('needs-fix', 'pr-created', 'pushed-no-pr', 'direct-pushed', 'already-processed')) {
+        # UI, selectable for a re-run), and error repos so a failed fix can be
+        # retried -- but only when their Analysis survived the round-trip,
+        # since the selection display dereferences it
+        if ($analysis -and $item.Status -in @('needs-fix', 'pr-created', 'pushed-no-pr', 'direct-pushed', 'already-processed', 'error')) {
             $results.Add($entry)
         }
     }
