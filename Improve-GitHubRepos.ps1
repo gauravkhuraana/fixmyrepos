@@ -293,9 +293,10 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
         Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
         Write-Host ""
         $secureToken = Read-Host "  Token" -AsSecureString
-        $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-        )
+        # NetworkCredential decodes correctly on both Windows PowerShell 5.1 and
+        # PS 7 on macOS/Linux (PtrToStringAuto misreads the UTF-16 BSTR as UTF-8
+        # on Unix and truncates the token to a single character).
+        $plain = [System.Net.NetworkCredential]::new('', $secureToken).Password
         if ([string]::IsNullOrWhiteSpace($plain)) {
             $GitHubToken = $null
             Write-Host "  No token provided -- falling back to scan-only mode (public repos, no PRs)." -ForegroundColor Yellow
@@ -323,9 +324,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
             Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
             Write-Host ""
             $secureToken = Read-Host "  Token" -AsSecureString
-            $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-            )
+            $plain = [System.Net.NetworkCredential]::new('', $secureToken).Password
             if (-not [string]::IsNullOrWhiteSpace($plain)) {
                 $GitHubToken = $plain
                 $script:HasToken = $true
@@ -422,6 +421,17 @@ function Write-Utf8NoBom {
     $enc = [System.Text.UTF8Encoding]::new($false)
     if ($Append) { [System.IO.File]::AppendAllText($full, $Content, $enc) }
     else         { [System.IO.File]::WriteAllText($full, $Content, $enc) }
+}
+
+function Open-ReportInBrowser {
+    # Auto-opens the report with the OS default handler on Windows and macOS.
+    # $IsMacOS does not exist on Windows PowerShell 5.1, so it must be guarded.
+    param([string]$Path)
+    $isWin = $env:OS -eq 'Windows_NT'
+    $isMac = (Test-Path variable:IsMacOS) -and $IsMacOS
+    if ($isWin -or $isMac) {
+        try { Invoke-Item $Path } catch { Write-Verbose "Could not open report: $_" }
+    }
 }
 
 function Initialize-Logger {
@@ -1214,7 +1224,7 @@ function Update-RateLimit {
 function Wait-IfRateLimited {
     <# Pauses automatically when approaching the rate limit (<=3 remaining) #>
     if ($script:RateLimitRemaining -le 3) {
-        $nowEpoch  = [long](Get-Date -UFormat %s)
+        $nowEpoch  = [System.DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $waitSecs  = [math]::Max($script:RateLimitReset - $nowEpoch + 2, 1)
         $resetTime = (Get-Date).AddSeconds($waitSecs).ToString('HH:mm:ss')
         Write-Log "Rate limit nearly exhausted ($($script:RateLimitRemaining) left). Waiting $waitSecs s until $resetTime ..." -Level Warn
@@ -1542,7 +1552,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
                 Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
                 Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
                 Write-Host "================================================" -ForegroundColor Cyan
-                if ($env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { Write-Verbose "Could not open report: $_" } }
+                Open-ReportInBrowser $lastReportPath
                 exit 0
             }
 
@@ -1715,7 +1725,7 @@ if ($DryRun) {
     Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
     Write-Host "================================================" -ForegroundColor Cyan
 
-    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    Open-ReportInBrowser $htmlFile
     exit 0
 }
 
@@ -1727,7 +1737,7 @@ if ($results.Count -eq 0) {
     Write-Log "Report (HTML): $htmlFile"; Write-Log "Report (MD): $reportFile"; Write-Log "Log: $logFile"
     Write-Host "`nAll repos look good!" -ForegroundColor Green
     Write-Host "  Report: $htmlFile" -ForegroundColor White
-    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    Open-ReportInBrowser $htmlFile
     exit 0
 }
 
@@ -2041,10 +2051,8 @@ Write-Host "  Created by gauravkhurana.com for community" -ForegroundColor DarkC
 Write-Host "  #SharingIsCaring" -ForegroundColor DarkCyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-# Auto-open HTML report on Windows
-if ($env:OS -eq "Windows_NT") {
-    try { Invoke-Item $htmlFile } catch { Write-Log "  Could not auto-open report: $_" -Level Warn }
-}
+# Auto-open HTML report on Windows and macOS
+Open-ReportInBrowser $htmlFile
 
 # Cleanup cloned repos if requested
 if ($Cleanup -and (Test-Path $WorkDir)) {
