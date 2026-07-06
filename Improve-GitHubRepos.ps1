@@ -426,6 +426,24 @@ function Write-Log {
     if ($script:LogFilePath) { Add-Content -Path $script:LogFilePath -Value $line -Encoding UTF8 }
 }
 
+function Invoke-Git {
+    # Runs git with stdout+stderr captured as plain strings. Git writes normal
+    # progress (e.g. "Cloning into...", "Switched to a new branch") to stderr;
+    # under $ErrorActionPreference='Stop' Windows PowerShell 5.1 wraps that benign
+    # stderr in a RemoteException and throws even when git succeeds. Running git
+    # under 'Continue' keeps those lines as ordinary output; callers detect real
+    # failures via $LASTEXITCODE.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = @(& git @args 2>&1 | ForEach-Object { "$_" })
+    }
+    finally {
+        $ErrorActionPreference = $prevEAP
+    }
+    return $out
+}
+
 # ===========================================================================
 # SECTION 1B: ANALYSIS CACHE (save/load analysis to avoid re-scanning)
 # ===========================================================================
@@ -785,7 +803,7 @@ function Invoke-RepoFix {
         foreach ($dir in $dirsToRemove) {
             if (Test-Path (Join-Path $RepoDir $dir)) {
                 Write-Log "  Untracking: $dir/ ..."
-                git rm -r --cached $dir 2>&1 | Out-Null
+                Invoke-Git rm -r --cached $dir | Out-Null
                 $changeLog.Add("- Removed ``$dir/`` from git tracking")
                 $changed = $true
             }
@@ -798,7 +816,7 @@ function Invoke-RepoFix {
             for ($i = 0; $i -lt $existing.Count; $i += $chunkSize) {
                 $end = [math]::Min($i + $chunkSize - 1, $existing.Count - 1)
                 $chunk = $existing[$i..$end]
-                git rm --cached --quiet -- @chunk 2>&1 | Out-Null
+                Invoke-Git rm --cached --quiet '--' @chunk | Out-Null
             }
             $changeLog.Add("- Removed $indiv individual junk files from tracking")
             $changed = $true
@@ -1362,7 +1380,7 @@ if ($Revert) {
                 if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
                 $publicUrl = "https://github.com/${rn}.git"
                 $cloneUrl = "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
-                $cloneOutput = & git clone $cloneUrl $rDir 2>&1
+                $cloneOutput = Invoke-Git clone $cloneUrl $rDir
                 foreach ($line in $cloneOutput) {
                     $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
                     Write-Log "    $safeLine"
@@ -1372,23 +1390,23 @@ if ($Revert) {
                 Push-Location $rDir
                 try {
                     # Strip token from .git/config; pass tokened URL only at push time.
-                    git remote set-url origin $publicUrl 2>&1 | Out-Null
-                    git config user.email "gitignore-improver@automation.local"
-                    git config user.name "GitIgnore Improver"
+                    Invoke-Git remote set-url origin $publicUrl | Out-Null
+                    Invoke-Git config user.email "gitignore-improver@automation.local" | Out-Null
+                    Invoke-Git config user.name "GitIgnore Improver" | Out-Null
                     foreach ($c in $ourCommits) {
                         $firstLine = ($c.commit.message -split "`n")[0]
                         Write-Log "  Reverting commit $($c.sha.Substring(0,7)): $firstLine"
-                        git revert --no-edit $c.sha 2>&1 | Out-Null
+                        Invoke-Git revert --no-edit $c.sha | Out-Null
                         if ($LASTEXITCODE -ne 0) {
                             Write-Log "  Revert conflict -- aborting this commit. Manual revert may be needed." -Level Warn
-                            git revert --abort 2>&1 | Out-Null
+                            Invoke-Git revert --abort | Out-Null
                             continue
                         }
                         $commitsReverted++
                         $repoCommits++
                     }
                     Write-Log "  Pushing revert(s) to $defBranch ..."
-                    $pushOut = & git push $cloneUrl "HEAD:$defBranch" 2>&1
+                    $pushOut = Invoke-Git push $cloneUrl "HEAD:$defBranch"
                     $pushExit = $LASTEXITCODE
                     foreach ($line in $pushOut) {
                         $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
@@ -1818,7 +1836,7 @@ foreach ($result in $selectedResults) {
             $publicUrl
         }
         Write-Log "  Cloning ..."
-        $cloneOutput = & git clone --depth 1 $cloneUrl $rDir 2>&1
+        $cloneOutput = Invoke-Git clone --depth 1 $cloneUrl $rDir
         $cloneExit = $LASTEXITCODE
         foreach ($line in $cloneOutput) {
             $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
@@ -1830,26 +1848,26 @@ foreach ($result in $selectedResults) {
         try {
             # Strip token from .git/config so it never lingers on disk.
             # We pass the tokened URL explicitly at push time instead.
-            if ($script:HasToken) { git remote set-url origin $publicUrl 2>&1 | Out-Null }
-            git config user.email "gitignore-improver@automation.local"
-            git config user.name "GitIgnore Improver"
+            if ($script:HasToken) { Invoke-Git remote set-url origin $publicUrl | Out-Null }
+            Invoke-Git config user.email "gitignore-improver@automation.local" | Out-Null
+            Invoke-Git config user.name "GitIgnore Improver" | Out-Null
 
             if (-not $DirectPush) {
-                $remoteBranches = git branch -r 2>&1
+                $remoteBranches = Invoke-Git branch -r
                 if ($remoteBranches -match "origin/$branchName") {
                     Write-Log "  Branch '$branchName' already exists on remote. Skipping." -Level Warn
                     $result.BranchUrl = "https://github.com/$rn/tree/$branchName"
                     $result.Status = "already-processed"
                     continue
                 }
-                git checkout -b $branchName 2>&1 | Out-Null
+                Invoke-Git checkout -b $branchName | Out-Null
             }
 
             $fix = Invoke-RepoFix -RepoDir $rDir -Analysis $result.Analysis -Language $result.Language
 
             if ($fix.ChangesMade) {
-                git add -A 2>&1 | Out-Null
-                $null = git commit -m "chore: improve .gitignore and remove tracked artifacts`n`n$($fix.CommitDetails)" 2>&1
+                Invoke-Git add -A | Out-Null
+                $null = Invoke-Git commit -m "chore: improve .gitignore and remove tracked artifacts`n`n$($fix.CommitDetails)"
                 $hasCommit = ($LASTEXITCODE -eq 0)
 
                 if (-not $hasCommit) {
@@ -1860,7 +1878,7 @@ foreach ($result in $selectedResults) {
 
                 if ($DirectPush) {
                     Write-Log "  Pushing directly to $($result.DefaultBranch) ..."
-                    $pushOut = & git push $cloneUrl "HEAD:$($result.DefaultBranch)" 2>&1
+                    $pushOut = Invoke-Git push $cloneUrl "HEAD:$($result.DefaultBranch)"
                     $pushExit = $LASTEXITCODE
                     foreach ($line in $pushOut) {
                         $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
@@ -1870,7 +1888,7 @@ foreach ($result in $selectedResults) {
                     $result.Status = "direct-pushed"
                 } else {
                     Write-Log "  Pushing branch ..."
-                    $pushOut = & git push $cloneUrl "${branchName}:${branchName}" 2>&1
+                    $pushOut = Invoke-Git push $cloneUrl "${branchName}:${branchName}"
                     $pushExit = $LASTEXITCODE
                     foreach ($line in $pushOut) {
                         $safeLine = "$line" -replace 'x-access-token:[^@]+@', 'x-access-token:***@'
