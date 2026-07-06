@@ -26,5 +26,8 @@ ehthumbs.db
 # PowerShell
 *.psm1.bak
 
+# Claude Code personal settings (local overrides, not shared)
+.claude/settings.local.json
+
 # Windows
 $RECYCLE.BIN/
