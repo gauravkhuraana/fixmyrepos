@@ -1066,7 +1066,7 @@ function Write-HtmlReport {
                    else { '<span class="junk-bar high"></span>' }
 
         $issueText = if ($r.Summary -and $r.Summary -ne 'clean') {
-            $r.Summary -replace '<','&lt;' -replace '>','&gt;' -replace '&','&amp;'
+            $r.Summary -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
         } else { '&mdash;' }
 
         $actionLink = if ($r.PRUrl) { '<a href="' + $r.PRUrl + '" target="_blank">Review PR</a>' }
@@ -1074,8 +1074,8 @@ function Write-HtmlReport {
                       else { '&mdash;' }
 
         $junkPct = if ($r.TotalFiles -gt 0) { [math]::Round(($r.JunkCount / $r.TotalFiles) * 100, 1) } else { 0 }
-        $repoNameEsc = $r.RepoFullName -replace '<','&lt;' -replace '>','&gt;'
-        $langEsc     = $r.Language -replace '<','&lt;' -replace '>','&gt;'
+        $repoNameEsc = $r.RepoFullName -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
+        $langEsc     = $r.Language -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
 
         [void]$sb.AppendLine("  <tr data-status=`"$($r.Status)`">")
         [void]$sb.AppendLine("    <td>$i</td>")
@@ -1143,6 +1143,15 @@ function Get-GHRepoList {
         "https://api.github.com/user/repos?per_page=100&affiliation=owner"
     } else {
         "https://api.github.com/users/$GitHubUser/repos?per_page=100"
+    }
+    # /user/repos scans the TOKEN OWNER's repos -- warn if that isn't who the user named
+    if ($script:HasToken -and $GitHubUser) {
+        try {
+            $tokenOwner = (Invoke-RestMethod -Uri "https://api.github.com/user" -Headers $script:GHHeaders).login
+            if ($tokenOwner -and $tokenOwner -ne $GitHubUser) {
+                Write-Log "  Token belongs to '$tokenOwner' but -GitHubUser is '$GitHubUser' -- scanning the token owner's repos." -Level Warn
+            }
+        } catch { Write-Verbose "Could not verify token owner: $_" }
     }
     do {
         Write-Log "Fetching repos page $page ..."
@@ -1369,6 +1378,7 @@ if ($Revert) {
 
         # 1. Close open PRs created by this tool
         try {
+            Wait-IfRateLimited
             $prs = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/pulls?state=open&per_page=100" -Headers $script:GHHeaders
             $ourPRs = @($prs | Where-Object { $_.title -match "^chore: improve \.gitignore" -and $_.head.ref -match "^improvement-" })
             foreach ($pr in $ourPRs) {
@@ -1386,6 +1396,7 @@ if ($Revert) {
 
         # 2. Delete improvement-* branches
         try {
+            Wait-IfRateLimited
             $refs = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/git/matching-refs/heads/improvement-" -Headers $script:GHHeaders
             foreach ($ref in @($refs)) {
                 $brName = $ref.ref -replace "^refs/heads/", ""
@@ -1402,8 +1413,10 @@ if ($Revert) {
 
         # 3. Revert direct-push commits on default branch (checks last 20 commits)
         try {
+            Wait-IfRateLimited
             $repoInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders
             $defBranch = $repoInfo.default_branch
+            Wait-IfRateLimited
             $commits = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/commits?sha=$defBranch&per_page=20" -Headers $script:GHHeaders
             $ourCommits = @($commits | Where-Object {
                 $_.commit.message -match "^chore: improve \.gitignore" -and
@@ -1586,8 +1599,10 @@ if (-not $usedCache) {
         foreach ($rn in $RepoName) {
             Write-Log "Fetching repo: $rn ..."
             try {
-                $r = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders
-                $targetRepos.Add($r)
+                Wait-IfRateLimited
+                $webResp = Invoke-WebRequest -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders -UseBasicParsing
+                Update-RateLimit $webResp
+                $targetRepos.Add(($webResp.Content | ConvertFrom-Json))
             } catch {
                 Write-Log "  Could not fetch repo '$rn' -- $_ (skipping)" -Level Warn
             }
@@ -1966,14 +1981,16 @@ $($fix.CommitDetails)
         Write-Log "  ERROR: $_" -Level Error
         $result.Status = "error"
     }
-
-    # Show progress after each repo
-    $actionDone = if ($result.PRUrl) { "PR: $($result.PRUrl)" }
-                  elseif ($result.Status -eq 'direct-pushed') { "Pushed to $($result.DefaultBranch)" }
-                  elseif ($result.Status -eq 'error') { "Error -- check log" }
-                  else { $result.Status }
-    $statusColor = if ($result.Status -eq 'error') { 'Red' } else { 'Green' }
-    Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn -> $actionDone" -ForegroundColor $statusColor
+    finally {
+        # Show progress after each repo -- runs even when the repo was skipped
+        # via 'continue' (branch already exists / nothing to commit)
+        $actionDone = if ($result.PRUrl) { "PR: $($result.PRUrl)" }
+                      elseif ($result.Status -eq 'direct-pushed') { "Pushed to $($result.DefaultBranch)" }
+                      elseif ($result.Status -eq 'error') { "Error -- check log" }
+                      else { $result.Status }
+        $statusColor = if ($result.Status -eq 'error') { 'Red' } else { 'Green' }
+        Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn -> $actionDone" -ForegroundColor $statusColor
+    }
 }
 
 # -- Phase 4: Report --------------------------------------------------------
