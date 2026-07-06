@@ -250,7 +250,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
         if ($cacheFiles.Count -gt 0) {
             try {
                 $cacheData = Get-Content -Path $cacheFiles[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-                if ($cacheData.user) { $cachedUser = $cacheData.user }
+                if ($cacheData.PSObject.Properties['user'] -and $cacheData.user) { $cachedUser = $cacheData.user }
             } catch { Write-Verbose "Could not read analysis cache: $_" }
         }
     }
@@ -500,8 +500,9 @@ function Save-AnalysisCache {
                 BranchUrl     = $_.BranchUrl
                 PRUrl         = $_.PRUrl
             }
-            # Save Analysis object details for problem repos so Phase 3 can use them
-            if ($_.Status -eq 'needs-fix' -and $_.Analysis) {
+            # Save Analysis object details for any repo that has them, so Phase 3
+            # can use them and already-processed repos survive a cache round-trip
+            if ($_.PSObject.Properties['Analysis'] -and $_.Analysis) {
                 $a = $_.Analysis
                 $entry.AnalysisData = @{
                     HasProblems      = $a.HasProblems
@@ -529,6 +530,11 @@ function Import-AnalysisCache {
     if (-not (Test-Path $CachePath)) { return $null }
     try {
         $raw = Get-Content -Path $CachePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        # Treat a cache missing required fields as absent -- consumers dereference
+        # these directly and StrictMode would throw on a hand-edited/truncated file
+        foreach ($required in 'user', 'timestamp', 'totalScanned', 'problemCount', 'allResults') {
+            if (-not $raw.PSObject.Properties[$required]) { return $null }
+        }
         return $raw
     } catch {
         return $null
@@ -578,7 +584,10 @@ function Restore-AnalysisFromCache {
         }
 
         $allResults.Add($entry)
-        if ($item.Status -eq 'needs-fix') {
+        # Keep already-processed repos in the selection list too (dimmed in the
+        # UI, selectable for a re-run) -- but only when their Analysis survived
+        # the round-trip, since the selection display dereferences it
+        if ($analysis -and $item.Status -in @('needs-fix', 'pr-created', 'pushed-no-pr', 'direct-pushed', 'already-processed')) {
             $results.Add($entry)
         }
     }
@@ -1979,6 +1988,10 @@ foreach ($r in $results) {
         $match.BranchUrl = $r.BranchUrl
     }
 }
+
+# Persist post-fix statuses (pr-created, direct-pushed, ...) so the next run
+# can dim already-processed repos instead of presenting them as fresh
+Save-AnalysisCache -CachePath $analysisCachePath -AllResults $allResults -ProblemResults $results -TotalScanned $totalScanned -User $GitHubUser
 
 Write-Report -ReportPath $reportFile -Results $results -GitHubUser $GitHubUser -RunDate $runDate -DryRun:$DryRun
 Write-Log "Report (Markdown): $reportFile"
