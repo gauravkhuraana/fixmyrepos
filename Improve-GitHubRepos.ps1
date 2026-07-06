@@ -69,43 +69,47 @@
 
 .EXAMPLE
     # Just run it -- you'll be prompted for what's needed:
-    .\Improve-GitHubRepos.ps1
+    ./Improve-GitHubRepos.ps1
+
+.EXAMPLE
+    # macOS / Linux: run under PowerShell 7 (brew install powershell/tap/powershell)
+    pwsh ./Improve-GitHubRepos.ps1
 
 .EXAMPLE
     # Scan public repos WITHOUT a token (report only, no PRs):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat"
 
 .EXAMPLE
     # Dry run with token (scans private repos too):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DryRun
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DryRun
 
 .EXAMPLE
     # Fix a specific repo only:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "my-project"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "my-project"
 
 .EXAMPLE
     # Fix multiple specific repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "repo1,repo2"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -RepoName "repo1,repo2"
 
 .EXAMPLE
     # Full run on all repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN
 
 .EXAMPLE
     # Push fixes directly to main (no branch/PR):
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DirectPush
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -DirectPush
 
 .EXAMPLE
     # Revert changes on a specific repo:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert -RepoName "my-project"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert -RepoName "my-project"
 
 .EXAMPLE
     # Revert all changes across all repos:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -Revert
 
 .EXAMPLE
     # Scan all repos except a few:
-    .\Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -ExcludeRepo "old-junk,experiments"
+    ./Improve-GitHubRepos.ps1 -GitHubUser "octocat" -GitHubToken $env:GITHUB_TOKEN -ExcludeRepo "old-junk,experiments"
 #>
 
 [CmdletBinding()]
@@ -250,7 +254,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
         if ($cacheFiles.Count -gt 0) {
             try {
                 $cacheData = Get-Content -Path $cacheFiles[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-                if ($cacheData.user) { $cachedUser = $cacheData.user }
+                if ($cacheData.PSObject.Properties['user'] -and $cacheData.user) { $cachedUser = $cacheData.user }
             } catch { Write-Verbose "Could not read analysis cache: $_" }
         }
     }
@@ -270,8 +274,8 @@ if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
     if ([string]::IsNullOrWhiteSpace($GitHubUser)) {
         Write-Host "  GitHub username is required. Exiting." -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Usage:  .\Improve-GitHubRepos.ps1 -GitHubUser 'you'" -ForegroundColor Gray
-        Write-Host "  Help:   Get-Help .\Improve-GitHubRepos.ps1 -Full" -ForegroundColor Gray
+        Write-Host "  Usage:  ./Improve-GitHubRepos.ps1 -GitHubUser 'you'" -ForegroundColor Gray
+        Write-Host "  Help:   Get-Help ./Improve-GitHubRepos.ps1 -Full" -ForegroundColor Gray
         exit 1
     }
 }
@@ -293,9 +297,10 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
         Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
         Write-Host ""
         $secureToken = Read-Host "  Token" -AsSecureString
-        $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-        )
+        # NetworkCredential decodes correctly on both Windows PowerShell 5.1 and
+        # PS 7 on macOS/Linux (PtrToStringAuto misreads the UTF-16 BSTR as UTF-8
+        # on Unix and truncates the token to a single character).
+        $plain = [System.Net.NetworkCredential]::new('', $secureToken).Password
         if ([string]::IsNullOrWhiteSpace($plain)) {
             $GitHubToken = $null
             Write-Host "  No token provided -- falling back to scan-only mode (public repos, no PRs)." -ForegroundColor Yellow
@@ -323,9 +328,7 @@ if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
             Write-Host "    5. Click 'Generate token' and paste it below" -ForegroundColor DarkCyan
             Write-Host ""
             $secureToken = Read-Host "  Token" -AsSecureString
-            $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-            )
+            $plain = [System.Net.NetworkCredential]::new('', $secureToken).Password
             if (-not [string]::IsNullOrWhiteSpace($plain)) {
                 $GitHubToken = $plain
                 $script:HasToken = $true
@@ -407,6 +410,34 @@ if ($DirectPush -and -not $script:MenuWasShown) {
 
 $script:LogFilePath = $null
 
+function Write-Utf8NoBom {
+    # Writes/appends text as UTF-8 WITHOUT a BOM on both PS 5.1 and PS 7.
+    # Set-Content/Add-Content -Encoding UTF8 emits a BOM on Windows PowerShell 5.1;
+    # a BOM in .gitignore makes git read the first pattern as garbage.
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Content,
+        [switch]$Append
+    )
+    # .NET resolves relative paths against the process CWD, not the PS location
+    $full = if ([System.IO.Path]::IsPathRooted($Path)) { $Path }
+            else { Join-Path (Get-Location).Path $Path }
+    $enc = [System.Text.UTF8Encoding]::new($false)
+    if ($Append) { [System.IO.File]::AppendAllText($full, $Content, $enc) }
+    else         { [System.IO.File]::WriteAllText($full, $Content, $enc) }
+}
+
+function Open-ReportInBrowser {
+    # Auto-opens the report with the OS default handler on Windows and macOS.
+    # $IsMacOS does not exist on Windows PowerShell 5.1, so it must be guarded.
+    param([string]$Path)
+    $isWin = $env:OS -eq 'Windows_NT'
+    $isMac = (Test-Path variable:IsMacOS) -and $IsMacOS
+    if ($isWin -or $isMac) {
+        try { Invoke-Item $Path } catch { Write-Verbose "Could not open report: $_" }
+    }
+}
+
 function Initialize-Logger {
     param([string]$Path)
     $script:LogFilePath = $Path
@@ -423,7 +454,7 @@ function Write-Log {
     $line  = "[$ts] [$tag] $Message"
     $color = switch ($Level) { "Warn" { "Yellow" } "Error" { "Red" } default { "Gray" } }
     Write-Host $line -ForegroundColor $color
-    if ($script:LogFilePath) { Add-Content -Path $script:LogFilePath -Value $line -Encoding UTF8 }
+    if ($script:LogFilePath) { Write-Utf8NoBom -Path $script:LogFilePath -Content ($line + [Environment]::NewLine) -Append }
 }
 
 function Invoke-Git {
@@ -473,8 +504,9 @@ function Save-AnalysisCache {
                 BranchUrl     = $_.BranchUrl
                 PRUrl         = $_.PRUrl
             }
-            # Save Analysis object details for problem repos so Phase 3 can use them
-            if ($_.Status -eq 'needs-fix' -and $_.Analysis) {
+            # Save Analysis object details for any repo that has them, so Phase 3
+            # can use them and already-processed repos survive a cache round-trip
+            if ($_.PSObject.Properties['Analysis'] -and $_.Analysis) {
                 $a = $_.Analysis
                 $entry.AnalysisData = @{
                     HasProblems      = $a.HasProblems
@@ -494,7 +526,7 @@ function Save-AnalysisCache {
             $entry
         })
     }
-    $cache | ConvertTo-Json -Depth 6 | Set-Content -Path $CachePath -Encoding UTF8
+    Write-Utf8NoBom -Path $CachePath -Content ($cache | ConvertTo-Json -Depth 6)
 }
 
 function Import-AnalysisCache {
@@ -502,6 +534,11 @@ function Import-AnalysisCache {
     if (-not (Test-Path $CachePath)) { return $null }
     try {
         $raw = Get-Content -Path $CachePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        # Treat a cache missing required fields as absent -- consumers dereference
+        # these directly and StrictMode would throw on a hand-edited/truncated file
+        foreach ($required in 'user', 'timestamp', 'totalScanned', 'problemCount', 'allResults') {
+            if (-not $raw.PSObject.Properties[$required]) { return $null }
+        }
         return $raw
     } catch {
         return $null
@@ -551,7 +588,11 @@ function Restore-AnalysisFromCache {
         }
 
         $allResults.Add($entry)
-        if ($item.Status -eq 'needs-fix') {
+        # Keep already-processed repos in the selection list too (dimmed in the
+        # UI, selectable for a re-run), and error repos so a failed fix can be
+        # retried -- but only when their Analysis survived the round-trip,
+        # since the selection display dereferences it
+        if ($analysis -and $item.Status -in @('needs-fix', 'pr-created', 'pushed-no-pr', 'direct-pushed', 'already-processed', 'error')) {
             $results.Add($entry)
         }
     }
@@ -766,7 +807,7 @@ function Invoke-RepoFix {
         foreach ($p in $Analysis.NeededPatterns) {
             if (-not (Test-GitignoreContainsPattern -Body $tpl -Pattern $p)) { $extra += "$p`n" }
         }
-        Set-Content -Path $giPath -Value ($tpl + $extra) -Encoding UTF8
+        Write-Utf8NoBom -Path $giPath -Content ($tpl + $extra)
         $changeLog.Add("- Created .gitignore with $Language template + $($Analysis.NeededPatterns.Count) extra patterns")
         $changed = $true
     }
@@ -779,7 +820,7 @@ function Invoke-RepoFix {
             if (-not (Test-GitignoreContainsPattern -Body $existing -Pattern $p)) { $append += "$p`n"; $count++ }
         }
         if ($count -gt 0) {
-            Add-Content -Path $giPath -Value $append -Encoding UTF8
+            Write-Utf8NoBom -Path $giPath -Content $append -Append
             $changeLog.Add("- Appended $count missing patterns to .gitignore")
             $changed = $true
         }
@@ -848,7 +889,7 @@ function Write-Report {
 
     if ($Results.Count -eq 0) {
         [void]$sb.AppendLine("> All repos look good! No .gitignore issues found.")
-        Set-Content -Path $ReportPath -Value $sb.ToString() -Encoding UTF8; return
+        Write-Utf8NoBom -Path $ReportPath -Content $sb.ToString(); return
     }
 
     # Summary table
@@ -902,7 +943,7 @@ function Write-Report {
     }
 
     [void]$sb.AppendLine("*Generated by Improve-GitHubRepos on $RunDate*")
-    Set-Content -Path $ReportPath -Value $sb.ToString() -Encoding UTF8
+    Write-Utf8NoBom -Path $ReportPath -Content $sb.ToString()
 }
 
 function Write-HtmlReport {
@@ -922,8 +963,10 @@ function Write-HtmlReport {
     $issueCount = @($AllResults | Where-Object { $_.Status -ne 'clean' -and $_.Status -ne 'skipped' }).Count
     $skipCount  = @($AllResults | Where-Object { $_.Status -eq 'skipped' }).Count
     $prCount    = @($AllResults | Where-Object { $_.Status -eq 'pr-created' }).Count
-    $totalJunk  = ($AllResults | Measure-Object -Property JunkCount -Sum).Sum
-    if ($null -eq $totalJunk) { $totalJunk = 0 }
+    # Measure-Object returns $null on an empty pipeline, and .Sum on $null
+    # throws under StrictMode -- guard before dereferencing
+    $junkMeasure = $AllResults | Measure-Object -Property JunkCount -Sum
+    $totalJunk   = if ($junkMeasure -and $null -ne $junkMeasure.Sum) { $junkMeasure.Sum } else { 0 }
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('<!DOCTYPE html>')
@@ -1030,7 +1073,7 @@ function Write-HtmlReport {
                    else { '<span class="junk-bar high"></span>' }
 
         $issueText = if ($r.Summary -and $r.Summary -ne 'clean') {
-            $r.Summary -replace '<','&lt;' -replace '>','&gt;' -replace '&','&amp;'
+            $r.Summary -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
         } else { '&mdash;' }
 
         $actionLink = if ($r.PRUrl) { '<a href="' + $r.PRUrl + '" target="_blank">Review PR</a>' }
@@ -1038,8 +1081,8 @@ function Write-HtmlReport {
                       else { '&mdash;' }
 
         $junkPct = if ($r.TotalFiles -gt 0) { [math]::Round(($r.JunkCount / $r.TotalFiles) * 100, 1) } else { 0 }
-        $repoNameEsc = $r.RepoFullName -replace '<','&lt;' -replace '>','&gt;'
-        $langEsc     = $r.Language -replace '<','&lt;' -replace '>','&gt;'
+        $repoNameEsc = $r.RepoFullName -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
+        $langEsc     = $r.Language -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
 
         [void]$sb.AppendLine("  <tr data-status=`"$($r.Status)`">")
         [void]$sb.AppendLine("    <td>$i</td>")
@@ -1083,7 +1126,7 @@ function Write-HtmlReport {
     [void]$sb.AppendLine('</script>')
     [void]$sb.AppendLine('</body></html>')
 
-    Set-Content -Path $ReportPath -Value $sb.ToString() -Encoding UTF8
+    Write-Utf8NoBom -Path $ReportPath -Content $sb.ToString()
 }
 
 # ===========================================================================
@@ -1107,6 +1150,15 @@ function Get-GHRepoList {
         "https://api.github.com/user/repos?per_page=100&affiliation=owner"
     } else {
         "https://api.github.com/users/$GitHubUser/repos?per_page=100"
+    }
+    # /user/repos scans the TOKEN OWNER's repos -- warn if that isn't who the user named
+    if ($script:HasToken -and $GitHubUser) {
+        try {
+            $tokenOwner = (Invoke-RestMethod -Uri "https://api.github.com/user" -Headers $script:GHHeaders).login
+            if ($tokenOwner -and $tokenOwner -ne $GitHubUser) {
+                Write-Log "  Token belongs to '$tokenOwner' but -GitHubUser is '$GitHubUser' -- scanning the token owner's repos." -Level Warn
+            }
+        } catch { Write-Verbose "Could not verify token owner: $_" }
     }
     do {
         Write-Log "Fetching repos page $page ..."
@@ -1197,7 +1249,7 @@ function Update-RateLimit {
 function Wait-IfRateLimited {
     <# Pauses automatically when approaching the rate limit (<=3 remaining) #>
     if ($script:RateLimitRemaining -le 3) {
-        $nowEpoch  = [long](Get-Date -UFormat %s)
+        $nowEpoch  = [System.DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $waitSecs  = [math]::Max($script:RateLimitReset - $nowEpoch + 2, 1)
         $resetTime = (Get-Date).AddSeconds($waitSecs).ToString('HH:mm:ss')
         Write-Log "Rate limit nearly exhausted ($($script:RateLimitRemaining) left). Waiting $waitSecs s until $resetTime ..." -Level Warn
@@ -1333,6 +1385,7 @@ if ($Revert) {
 
         # 1. Close open PRs created by this tool
         try {
+            Wait-IfRateLimited
             $prs = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/pulls?state=open&per_page=100" -Headers $script:GHHeaders
             $ourPRs = @($prs | Where-Object { $_.title -match "^chore: improve \.gitignore" -and $_.head.ref -match "^improvement-" })
             foreach ($pr in $ourPRs) {
@@ -1350,6 +1403,7 @@ if ($Revert) {
 
         # 2. Delete improvement-* branches
         try {
+            Wait-IfRateLimited
             $refs = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/git/matching-refs/heads/improvement-" -Headers $script:GHHeaders
             foreach ($ref in @($refs)) {
                 $brName = $ref.ref -replace "^refs/heads/", ""
@@ -1366,8 +1420,10 @@ if ($Revert) {
 
         # 3. Revert direct-push commits on default branch (checks last 20 commits)
         try {
+            Wait-IfRateLimited
             $repoInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders
             $defBranch = $repoInfo.default_branch
+            Wait-IfRateLimited
             $commits = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn/commits?sha=$defBranch&per_page=20" -Headers $script:GHHeaders
             $ourCommits = @($commits | Where-Object {
                 $_.commit.message -match "^chore: improve \.gitignore" -and
@@ -1465,7 +1521,7 @@ if ($Revert) {
             }
             if ($cacheUpdated) {
                 $revertCache.problemCount = @($revertCache.allResults | Where-Object { $_.Status -eq 'needs-fix' }).Count
-                $revertCache | ConvertTo-Json -Depth 6 | Set-Content -Path $revertCachePath -Encoding UTF8
+                Write-Utf8NoBom -Path $revertCachePath -Content ($revertCache | ConvertTo-Json -Depth 6)
                 Write-Log "Analysis cache updated: reverted repos set back to needs-fix"
             }
         }
@@ -1525,7 +1581,7 @@ if ($script:ChosenMode -eq 'analyze' -or $script:ChosenMode -eq 'pr' -or $script
                 Write-Host "  Next step: Re-run and choose option [2] PR or [3] Direct merge" -ForegroundColor DarkGray
                 Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
                 Write-Host "================================================" -ForegroundColor Cyan
-                if ($env:OS -eq "Windows_NT") { try { Invoke-Item $lastReportPath } catch { Write-Verbose "Could not open report: $_" } }
+                Open-ReportInBrowser $lastReportPath
                 exit 0
             }
 
@@ -1550,8 +1606,10 @@ if (-not $usedCache) {
         foreach ($rn in $RepoName) {
             Write-Log "Fetching repo: $rn ..."
             try {
-                $r = Invoke-RestMethod -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders
-                $targetRepos.Add($r)
+                Wait-IfRateLimited
+                $webResp = Invoke-WebRequest -Uri "https://api.github.com/repos/$rn" -Headers $script:GHHeaders -UseBasicParsing
+                Update-RateLimit $webResp
+                $targetRepos.Add(($webResp.Content | ConvertFrom-Json))
             } catch {
                 Write-Log "  Could not fetch repo '$rn' -- $_ (skipping)" -Level Warn
             }
@@ -1698,7 +1756,7 @@ if ($DryRun) {
     Write-Host "  to fix the repos using this analysis." -ForegroundColor DarkGray
     Write-Host "================================================" -ForegroundColor Cyan
 
-    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    Open-ReportInBrowser $htmlFile
     exit 0
 }
 
@@ -1710,7 +1768,7 @@ if ($results.Count -eq 0) {
     Write-Log "Report (HTML): $htmlFile"; Write-Log "Report (MD): $reportFile"; Write-Log "Log: $logFile"
     Write-Host "`nAll repos look good!" -ForegroundColor Green
     Write-Host "  Report: $htmlFile" -ForegroundColor White
-    if ($env:OS -eq "Windows_NT") { try { Invoke-Item $htmlFile } catch { Write-Verbose "Could not open report: $_" } }
+    Open-ReportInBrowser $htmlFile
     exit 0
 }
 
@@ -1830,11 +1888,8 @@ foreach ($result in $selectedResults) {
     try {
         if (Test-Path $rDir) { Remove-Item -Recurse -Force $rDir }
         $publicUrl = "https://github.com/${rn}.git"
-        $cloneUrl = if ($script:HasToken) {
-            "https://x-access-token:${GitHubToken}@github.com/${rn}.git"
-        } else {
-            $publicUrl
-        }
+        # Single line so the token-leak CI check can match its $cloneUrl-assignment exclusion
+        $cloneUrl = if ($script:HasToken) { "https://x-access-token:${GitHubToken}@github.com/${rn}.git" } else { $publicUrl }
         Write-Log "  Cloning ..."
         $cloneOutput = Invoke-Git clone --depth 1 $cloneUrl $rDir
         $cloneExit = $LASTEXITCODE
@@ -1930,14 +1985,16 @@ $($fix.CommitDetails)
         Write-Log "  ERROR: $_" -Level Error
         $result.Status = "error"
     }
-
-    # Show progress after each repo
-    $actionDone = if ($result.PRUrl) { "PR: $($result.PRUrl)" }
-                  elseif ($result.Status -eq 'direct-pushed') { "Pushed to $($result.DefaultBranch)" }
-                  elseif ($result.Status -eq 'error') { "Error -- check log" }
-                  else { $result.Status }
-    $statusColor = if ($result.Status -eq 'error') { 'Red' } else { 'Green' }
-    Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn -> $actionDone" -ForegroundColor $statusColor
+    finally {
+        # Show progress after each repo -- runs even when the repo was skipped
+        # via 'continue' (branch already exists / nothing to commit)
+        $actionDone = if ($result.PRUrl) { "PR: $($result.PRUrl)" }
+                      elseif ($result.Status -eq 'direct-pushed') { "Pushed to $($result.DefaultBranch)" }
+                      elseif ($result.Status -eq 'error') { "Error -- check log" }
+                      else { $result.Status }
+        $statusColor = if ($result.Status -eq 'error') { 'Red' } else { 'Green' }
+        Write-Host "  [$phase3Index/$($selectedResults.Count)] $rn -> $actionDone" -ForegroundColor $statusColor
+    }
 }
 
 # -- Phase 4: Report --------------------------------------------------------
@@ -1952,6 +2009,10 @@ foreach ($r in $results) {
         $match.BranchUrl = $r.BranchUrl
     }
 }
+
+# Persist post-fix statuses (pr-created, direct-pushed, ...) so the next run
+# can dim already-processed repos instead of presenting them as fresh
+Save-AnalysisCache -CachePath $analysisCachePath -AllResults $allResults -ProblemResults $results -TotalScanned $totalScanned -User $GitHubUser
 
 Write-Report -ReportPath $reportFile -Results $results -GitHubUser $GitHubUser -RunDate $runDate -DryRun:$DryRun
 Write-Log "Report (Markdown): $reportFile"
@@ -1989,7 +2050,7 @@ $jsonData = @{
         }
     })
 }
-$jsonData | ConvertTo-Json -Depth 5 | Set-Content -Path $jsonFile -Encoding UTF8
+Write-Utf8NoBom -Path $jsonFile -Content ($jsonData | ConvertTo-Json -Depth 5)
 Write-Log "Report (JSON):     $jsonFile"
 Write-Log "Log: $logFile"
 Write-Log "===== Done ====="
@@ -2024,10 +2085,8 @@ Write-Host "  Created by gauravkhurana.com for community" -ForegroundColor DarkC
 Write-Host "  #SharingIsCaring" -ForegroundColor DarkCyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-# Auto-open HTML report on Windows
-if ($env:OS -eq "Windows_NT") {
-    try { Invoke-Item $htmlFile } catch { Write-Log "  Could not auto-open report: $_" -Level Warn }
-}
+# Auto-open HTML report on Windows and macOS
+Open-ReportInBrowser $htmlFile
 
 # Cleanup cloned repos if requested
 if ($Cleanup -and (Test-Path $WorkDir)) {

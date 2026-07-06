@@ -1,6 +1,6 @@
 # Improve-GitHubRepos
 
-**One script. Zero dependencies (besides PowerShell + Git).** Download it, run it, done.
+**One script. Zero dependencies (besides PowerShell + Git). Works on Windows, macOS, and Linux.** Download it, run it, done.
 
 Scans all your GitHub repos, finds missing/weak `.gitignore` files, fixes them, and opens PRs — so your profile shows the right language stats and your repos stay lean.
 
@@ -25,17 +25,19 @@ Many developers forget to add a proper `.gitignore`, causing:
 
 ### Installation
 
+Requires PowerShell — see [Prerequisites](#prerequisites) if you don't have it yet (on macOS: `brew install powershell/tap/powershell`).
+
 **Option A: Clone the repo (recommended)**
 ```bash
 git clone https://github.com/gauravkhuraana/fixmyrepos.git
 cd fixmyrepos
-.\Improve-GitHubRepos.ps1
+pwsh ./Improve-GitHubRepos.ps1     # on Windows PowerShell: ./Improve-GitHubRepos.ps1
 ```
 
 **Option B: Download just the script (no git clone needed)**
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/gauravkhuraana/fixmyrepos/main/Improve-GitHubRepos.ps1" -OutFile "Improve-GitHubRepos.ps1"
-.\Improve-GitHubRepos.ps1
+./Improve-GitHubRepos.ps1
 ```
 
 > **Note:** Clone if you want automatic updates (`git pull`). Download if you just want a quick one-time run.
@@ -44,7 +46,7 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/gauravkhuraana/fixmyre
 
 ```powershell
 # Just run it — you'll be prompted for everything:
-.\Improve-GitHubRepos.ps1
+./Improve-GitHubRepos.ps1
 ```
 
 That's it. No flags needed. It asks for your username, then token.
@@ -55,7 +57,7 @@ That's it. No flags needed. It asks for your username, then token.
 
 ```powershell
 # Just provide a username — no token needed:
-.\Improve-GitHubRepos.ps1 -GitHubUser "octocat"
+./Improve-GitHubRepos.ps1 -GitHubUser "octocat"
 ```
 
 This uses the unauthenticated GitHub API (60 requests/hour, public repos only).
@@ -65,23 +67,23 @@ Great for checking someone's profile or your own public repos without any setup.
 
 ```powershell
 # Dry run first (safe — just scans, no changes)
-.\Improve-GitHubRepos.ps1 -GitHubUser "your-username" -GitHubToken $env:GITHUB_TOKEN -DryRun
+./Improve-GitHubRepos.ps1 -GitHubUser "your-username" -GitHubToken $env:GITHUB_TOKEN -DryRun
 
 # Full run (fixes + creates PRs)
-.\Improve-GitHubRepos.ps1 -GitHubUser "your-username" -GitHubToken $env:GITHUB_TOKEN
+./Improve-GitHubRepos.ps1 -GitHubUser "your-username" -GitHubToken $env:GITHUB_TOKEN
 ```
 
 ### Target a specific repo
 
 ```powershell
 # Fix just one repo (short name or full name both work)
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -RepoName "my-project"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -RepoName "my-project"
 
 # Fix multiple specific repos (comma-separated)
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -RepoName "repo1,repo2,old-app"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -RepoName "repo1,repo2,old-app"
 
 # Full name works too
-.\Improve-GitHubRepos.ps1 -GitHubToken $token -RepoName "octocat/Hello-World"
+./Improve-GitHubRepos.ps1 -GitHubToken $token -RepoName "octocat/Hello-World"
 ```
 
 One file, one command.
@@ -90,20 +92,20 @@ One file, one command.
 
 ```powershell
 # Skip branch/PR — commit straight to default branch (asks for confirmation)
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -DirectPush
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -DirectPush
 
 # Direct push on a specific repo
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -DirectPush -RepoName "my-project"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -DirectPush -RepoName "my-project"
 ```
 
 ### Revert changes
 
 ```powershell
 # Revert a specific repo (closes PRs, deletes branches, reverts direct-push commits)
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Revert -RepoName "my-project"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Revert -RepoName "my-project"
 
 # Revert ALL repos touched by this tool
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Revert
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Revert
 ```
 
 ### Manual revert (without the script)
@@ -145,30 +147,59 @@ git log --oneline --grep="chore: improve .gitignore" | head -1
 
 ```powershell
 # Scan everything EXCEPT these repos
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -ExcludeRepo "old-junk,experiments,dotfiles"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -ExcludeRepo "old-junk,experiments,dotfiles"
 ```
 
 ## Prerequisites
 
-- **PowerShell 7+** (recommended) or Windows PowerShell 5.1
+- **PowerShell 7+** (Windows, macOS, Linux) or **Windows PowerShell 5.1** (Windows only)
+
+  | OS | How to get PowerShell |
+  |----|----------------------|
+  | Windows | Already installed (5.1). For 7+: `winget install Microsoft.PowerShell` |
+  | macOS | `brew install powershell/tap/powershell`, then start it with `pwsh` |
+  | Linux | See [Microsoft's install docs](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-linux) |
+
 - **Git** installed and on PATH (the script checks for this upfront)
 - **GitHub Personal Access Token** with `repo` scope
   - [Create one here](https://github.com/settings/tokens) → Classic token → check **`repo`**
+
+### Setting your token as an environment variable
+
+```powershell
+# Inside PowerShell (any OS):
+$env:GITHUB_TOKEN = "ghp_..."
+```
+```bash
+# Or in bash/zsh before launching pwsh (macOS/Linux) — pwsh inherits it:
+export GITHUB_TOKEN="ghp_..."
+```
+
+### First run on Windows blocked?
+
+If Windows PowerShell refuses to run the script ("running scripts is disabled" or "not digitally signed"), allow it for the current session only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+Unblock-File ./Improve-GitHubRepos.ps1   # only needed if the file was downloaded
+```
+
+Nothing like this is needed on macOS/Linux.
 
 ## All Options
 
 ```powershell
 # Custom work directory
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -WorkDir "D:\temp\repos"
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -WorkDir "/tmp/repos"   # e.g. "D:\temp\repos" on Windows
 
 # Include forks and archived repos
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -SkipForks $false -SkipArchived $false
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -SkipForks $false -SkipArchived $false
 
 # Auto-delete cloned repos after creating PRs
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Cleanup
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -Cleanup
 
 # Pause every 10 repos during analysis (default: 30)
-.\Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -BatchSize 10
+./Improve-GitHubRepos.ps1 -GitHubUser "you" -GitHubToken $token -BatchSize 10
 ```
 
 | Parameter | Required | Default | Description |
@@ -276,9 +307,9 @@ fixmyrepos/
 
 | Claim | How to verify |
 |-------|---------------|
-| Token is **never written to disk** (logs, reports, files) | `Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'GitHubToken' \| Select-String 'Set-Content\|Add-Content\|Out-File'` — returns nothing |
-| Token is **only sent to `github.com`** | `Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'Invoke-RestMethod'` — every URL is `api.github.com` or `raw.githubusercontent.com` |
-| All git output is **redacted** before logging | `Select-String -Path .\Improve-GitHubRepos.ps1 -Pattern 'x-access-token'` — every usage is followed by `replace 'x-access-token:[^@]+@', 'x-access-token:***@'` |
+| Token is **never written to disk** (logs, reports, files) | `Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'GitHubToken' \| Select-String 'Set-Content\|Add-Content\|Out-File'` — returns nothing |
+| Token is **only sent to `github.com`** | `Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'Invoke-RestMethod'` — every URL is `api.github.com` or `raw.githubusercontent.com` |
+| All git output is **redacted** before logging | `Select-String -Path ./Improve-GitHubRepos.ps1 -Pattern 'x-access-token'` — every usage is followed by `replace 'x-access-token:[^@]+@', 'x-access-token:***@'` |
 | **No telemetry**, no analytics, no external calls | It's one file — read it. There are zero non-GitHub network calls |
 
 ### Automated scanning (CI)
@@ -313,7 +344,7 @@ See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability re
 - **DirectPush confirmation** — requires typing 'yes' before committing directly to default branches
 - **Revert safety** — `-Revert` undoes everything: closes PRs, deletes branches, and `git revert`s direct-push commits
 - **Token redaction** — any git output that might contain the token is automatically scrubbed before logging
-- **Auto-open report** — on Windows, the Markdown report opens automatically when finished
+- **Auto-open report** — on Windows and macOS, the HTML report opens automatically when finished
 - **Cleanup flag** — pass `-Cleanup` to delete cloned repos from `WorkDir` after PRs are created
 - **ExcludeRepo** — skip specific repos when scanning all: `-ExcludeRepo "old-junk,experiments"`
 - **DryRun preview** — shows exactly what patterns would be added and files untracked, per repo
